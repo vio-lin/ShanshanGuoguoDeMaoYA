@@ -1,4 +1,4 @@
-# 衫衫果果的猫呀 🐱
+# 山山国国的猫呀 🐱
 
 一只会待在桌面上的布偶猫桌宠（macOS + Windows）。
 
@@ -31,3 +31,7 @@ GitHub Actions 已配置自动构建：推送到 `main` 分支自动出双平台
 
 - Electron + Electron Forge + Webpack + TypeScript
 - 角色素材由 Seedream 生成，Apple Vision 语义抠图处理
+
+---
+
+Code by Doubao 🐱
