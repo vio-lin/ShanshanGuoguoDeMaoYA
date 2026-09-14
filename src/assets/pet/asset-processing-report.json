@@ -1,0 +1,2007 @@
+{
+  "schemaVersion": 5,
+  "scope": "all",
+  "backgroundMode": "semantic-cutout",
+  "segmentationBackend": "apple-vision",
+  "subjectKind": "photo",
+  "generationBackground": "transparent-grid",
+  "threshold": 24,
+  "feather": 8,
+  "safeMargin": 32,
+  "targetOccupancy": 0.75,
+  "trayIcon": {
+    "path": "src/assets/tray/tray-icon.png",
+    "width": 32,
+    "height": 32
+  },
+  "assets": [
+    {
+      "ok": true,
+      "name": "idle/01.png",
+      "state": "idle",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.41082191467285156,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6914130713918849,
+      "sourceBounds": [
+        199,
+        89,
+        906,
+        968
+      ],
+      "sharedScale": 0.43636363636363634,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        309,
+        384
+      ],
+      "groupSourceMaximum": [
+        708,
+        880
+      ],
+      "outputBounds": [
+        102,
+        101,
+        410,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "idle/02.png",
+      "state": "idle",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4067420959472656,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6845467385721623,
+      "sourceBounds": [
+        199,
+        89,
+        906,
+        968
+      ],
+      "sharedScale": 0.43636363636363634,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        309,
+        384
+      ],
+      "groupSourceMaximum": [
+        708,
+        880
+      ],
+      "outputBounds": [
+        102,
+        101,
+        410,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "idle/03.png",
+      "state": "idle",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.40856075286865234,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6876075372367745,
+      "sourceBounds": [
+        199,
+        89,
+        906,
+        968
+      ],
+      "sharedScale": 0.43636363636363634,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        309,
+        384
+      ],
+      "groupSourceMaximum": [
+        708,
+        880
+      ],
+      "outputBounds": [
+        102,
+        101,
+        410,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "idle/04.png",
+      "state": "idle",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3983020782470703,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6843400579390984,
+      "sourceBounds": [
+        199,
+        89,
+        906,
+        950
+      ],
+      "sharedScale": 0.43636363636363634,
+      "normalizationCorrection": 1.0212765957446808,
+      "referenceVisibleSize": [
+        309,
+        384
+      ],
+      "groupSourceMaximum": [
+        708,
+        880
+      ],
+      "outputBounds": [
+        98,
+        101,
+        413,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "idle/05.png",
+      "state": "idle",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": false,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.41199207305908203,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7601359079120082,
+      "sourceBounds": [
+        199,
+        102,
+        852,
+        970
+      ],
+      "sharedScale": 0.43636363636363634,
+      "normalizationCorrection": 1.0131926121372032,
+      "referenceVisibleSize": [
+        309,
+        384
+      ],
+      "groupSourceMaximum": [
+        708,
+        880
+      ],
+      "outputBounds": [
+        112,
+        101,
+        400,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "blink/01.png",
+      "state": "blink",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44515037536621094,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7626926445405943,
+      "sourceBounds": [
+        197,
+        79,
+        873,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        288,
+        384
+      ],
+      "groupSourceMaximum": [
+        677,
+        904
+      ],
+      "outputBounds": [
+        112,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "blink/02.png",
+      "state": "blink",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4464082717895508,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7665437383526514,
+      "sourceBounds": [
+        197,
+        79,
+        873,
+        980
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1.0026109660574412,
+      "referenceVisibleSize": [
+        288,
+        384
+      ],
+      "groupSourceMaximum": [
+        677,
+        904
+      ],
+      "outputBounds": [
+        112,
+        101,
+        400,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "blink/03.png",
+      "state": "blink",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4455099105834961,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7633086495601364,
+      "sourceBounds": [
+        197,
+        79,
+        873,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        288,
+        384
+      ],
+      "groupSourceMaximum": [
+        677,
+        904
+      ],
+      "outputBounds": [
+        112,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "blink/04.png",
+      "state": "blink",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44382667541503906,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7632381689604955,
+      "sourceBounds": [
+        197,
+        79,
+        872,
+        980
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1.0026109660574412,
+      "referenceVisibleSize": [
+        288,
+        384
+      ],
+      "groupSourceMaximum": [
+        677,
+        904
+      ],
+      "outputBounds": [
+        112,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "blink/05.png",
+      "state": "blink",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4459552764892578,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7640717114808957,
+      "sourceBounds": [
+        198,
+        79,
+        874,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        288,
+        384
+      ],
+      "groupSourceMaximum": [
+        677,
+        904
+      ],
+      "outputBounds": [
+        112,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "tap/01.png",
+      "state": "tap",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44234275817871094,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7629435412239205,
+      "sourceBounds": [
+        198,
+        79,
+        871,
+        980
+      ],
+      "sharedScale": 0.423841059602649,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        286,
+        382
+      ],
+      "groupSourceMaximum": [
+        677,
+        906
+      ],
+      "outputBounds": [
+        113,
+        103,
+        398,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "tap/02.png",
+      "state": "tap",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4445381164550781,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7616436386452464,
+      "sourceBounds": [
+        197,
+        79,
+        873,
+        982
+      ],
+      "sharedScale": 0.423841059602649,
+      "normalizationCorrection": 0.9969522610575575,
+      "referenceVisibleSize": [
+        286,
+        382
+      ],
+      "groupSourceMaximum": [
+        677,
+        906
+      ],
+      "outputBounds": [
+        113,
+        103,
+        398,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "tap/03.png",
+      "state": "tap",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4284038543701172,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.772641898864809,
+      "sourceBounds": [
+        197,
+        81,
+        842,
+        980
+      ],
+      "sharedScale": 0.423841059602649,
+      "normalizationCorrection": 1.023003050576573,
+      "referenceVisibleSize": [
+        286,
+        382
+      ],
+      "groupSourceMaximum": [
+        677,
+        906
+      ],
+      "outputBounds": [
+        118,
+        101,
+        393,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "tap/04.png",
+      "state": "tap",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.41741466522216797,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7379467898570272,
+      "sourceBounds": [
+        159,
+        85,
+        832,
+        964
+      ],
+      "sharedScale": 0.423841059602649,
+      "normalizationCorrection": 1.0119924339277828,
+      "referenceVisibleSize": [
+        286,
+        382
+      ],
+      "groupSourceMaximum": [
+        677,
+        906
+      ],
+      "outputBounds": [
+        112,
+        108,
+        400,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "tap/05.png",
+      "state": "tap",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4432048797607422,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.761055541362889,
+      "sourceBounds": [
+        199,
+        79,
+        872,
+        984
+      ],
+      "sharedScale": 0.423841059602649,
+      "normalizationCorrection": 0.9973924336321519,
+      "referenceVisibleSize": [
+        286,
+        382
+      ],
+      "groupSourceMaximum": [
+        677,
+        906
+      ],
+      "outputBounds": [
+        114,
+        102,
+        398,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "notify/01.png",
+      "state": "notify",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44448280334472656,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7635200220173387,
+      "sourceBounds": [
+        197,
+        79,
+        872,
+        981
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        287,
+        384
+      ],
+      "groupSourceMaximum": [
+        696,
+        904
+      ],
+      "outputBounds": [
+        113,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "notify/02.png",
+      "state": "notify",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4436349868774414,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.761220676022412,
+      "sourceBounds": [
+        197,
+        79,
+        872,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1,
+      "referenceVisibleSize": [
+        287,
+        384
+      ],
+      "groupSourceMaximum": [
+        696,
+        904
+      ],
+      "outputBounds": [
+        113,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "notify/03.png",
+      "state": "notify",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44324684143066406,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7633702882483371,
+      "sourceBounds": [
+        198,
+        81,
+        872,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1.0013046319963976,
+      "referenceVisibleSize": [
+        287,
+        384
+      ],
+      "groupSourceMaximum": [
+        696,
+        904
+      ],
+      "outputBounds": [
+        113,
+        102,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "notify/04.png",
+      "state": "notify",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.45068931579589844,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7511030159698912,
+      "sourceBounds": [
+        179,
+        79,
+        874,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 0.9846799452586584,
+      "referenceVisibleSize": [
+        287,
+        384
+      ],
+      "groupSourceMaximum": [
+        696,
+        904
+      ],
+      "outputBounds": [
+        111,
+        107,
+        401,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "notify/05.png",
+      "state": "notify",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44090747833251953,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7593413812926008,
+      "sourceBounds": [
+        198,
+        79,
+        872,
+        980
+      ],
+      "sharedScale": 0.4247787610619469,
+      "normalizationCorrection": 1.0013046319963976,
+      "referenceVisibleSize": [
+        287,
+        384
+      ],
+      "groupSourceMaximum": [
+        696,
+        904
+      ],
+      "outputBounds": [
+        113,
+        102,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "peek/01.png",
+      "state": "peek",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3922309875488281,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6867002377581278,
+      "sourceBounds": [
+        175,
+        83,
+        838,
+        984
+      ],
+      "sharedScale": 0.42572062084257206,
+      "normalizationCorrection": 1.0123601199017527,
+      "referenceVisibleSize": [
+        297,
+        375
+      ],
+      "groupSourceMaximum": [
+        831,
+        902
+      ],
+      "outputBounds": [
+        115,
+        101,
+        396,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "peek/02.png",
+      "state": "peek",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.39999866485595703,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6797524277509108,
+      "sourceBounds": [
+        143,
+        87,
+        840,
+        970
+      ],
+      "sharedScale": 0.42572062084257206,
+      "normalizationCorrection": 0.9986693274212015,
+      "referenceVisibleSize": [
+        297,
+        375
+      ],
+      "groupSourceMaximum": [
+        831,
+        902
+      ],
+      "outputBounds": [
+        108,
+        110,
+        404,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "peek/03.png",
+      "state": "peek",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.4344768524169922,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6229925609889508,
+      "sourceBounds": [
+        76,
+        97,
+        906,
+        976
+      ],
+      "sharedScale": 0.42572062084257206,
+      "normalizationCorrection": 0.9159601797280587,
+      "referenceVisibleSize": [
+        297,
+        375
+      ],
+      "groupSourceMaximum": [
+        831,
+        902
+      ],
+      "outputBounds": [
+        94,
+        142,
+        417,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "peek/04.png",
+      "state": "peek",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.35080528259277344,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6019762250762605,
+      "sourceBounds": [
+        163,
+        115,
+        900,
+        942
+      ],
+      "sharedScale": 0.42572062084257206,
+      "normalizationCorrection": 1.003824295661601,
+      "referenceVisibleSize": [
+        297,
+        375
+      ],
+      "groupSourceMaximum": [
+        831,
+        902
+      ],
+      "outputBounds": [
+        99,
+        132,
+        413,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "peek/05.png",
+      "state": "peek",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3371133804321289,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6588331115410279,
+      "sourceBounds": [
+        163,
+        149,
+        831,
+        950
+      ],
+      "sharedScale": 0.42572062084257206,
+      "normalizationCorrection": 1.0705186531570647,
+      "referenceVisibleSize": [
+        297,
+        375
+      ],
+      "groupSourceMaximum": [
+        831,
+        902
+      ],
+      "outputBounds": [
+        104,
+        120,
+        408,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/01.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44008827209472656,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6594783235011661,
+      "sourceBounds": [
+        71,
+        153,
+        958,
+        940
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 0.9788765917530149,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        70,
+        154,
+        442,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/02.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.38184452056884766,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5460525059665872,
+      "sourceBounds": [
+        49,
+        129,
+        923,
+        966
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 0.956052842178212,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        77,
+        141,
+        435,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/03.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.34137630462646484,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5571302947058778,
+      "sourceBounds": [
+        47,
+        161,
+        897,
+        915
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 1.0214799435899047,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        70,
+        154,
+        442,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/04.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3235292434692383,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5567161386879521,
+      "sourceBounds": [
+        37,
+        203,
+        880,
+        924
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 1.048609164477091,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        66,
+        160,
+        445,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/05.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.28660011291503906,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5203519780585106,
+      "sourceBounds": [
+        89,
+        139,
+        840,
+        906
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 1.0759461851151797,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        82,
+        130,
+        429,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "walk/06.png",
+      "state": "walk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3690910339355469,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5501585000071076,
+      "sourceBounds": [
+        63,
+        137,
+        957,
+        922
+      ],
+      "sharedScale": 0.42905027932960893,
+      "normalizationCorrection": 0.9764909407510863,
+      "referenceVisibleSize": [
+        370,
+        333.5
+      ],
+      "groupSourceMaximum": [
+        895,
+        838
+      ],
+      "outputBounds": [
+        69,
+        156,
+        443,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/01.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.22069358825683594,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5494785730567586,
+      "sourceBounds": [
+        61,
+        314,
+        916,
+        805
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 0.991381693185306,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        74,
+        276,
+        437,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/02.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.21665191650390625,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5427249966553905,
+      "sourceBounds": [
+        61,
+        316,
+        916,
+        804
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 0.9937393224200376,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        74,
+        276,
+        438,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/03.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.22026538848876953,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5775655548720411,
+      "sourceBounds": [
+        111,
+        303,
+        913,
+        800
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 1.0191688274323905,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        81,
+        268,
+        431,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/04.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.22835826873779297,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5262196729957805,
+      "sourceBounds": [
+        113,
+        235,
+        902,
+        810
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 0.9533817385485459,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        95,
+        250,
+        417,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/05.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.17762374877929688,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.47919110836677986,
+      "sourceBounds": [
+        93,
+        309,
+        912,
+        782
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 1.0335073690741567,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        75,
+        275,
+        437,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "jump/06.png",
+      "state": "jump",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.28662776947021484,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5282462739032621,
+      "sourceBounds": [
+        21,
+        182,
+        916,
+        816
+      ],
+      "sharedScale": 0.42857142857142855,
+      "normalizationCorrection": 0.853620999785332,
+      "referenceVisibleSize": [
+        359,
+        212
+      ],
+      "groupSourceMaximum": [
+        896,
+        635
+      ],
+      "outputBounds": [
+        92,
+        253,
+        419,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/01.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3684701919555664,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7756295469510335,
+      "sourceBounds": [
+        61,
+        217,
+        937,
+        784
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 0.9926099088048455,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        66,
+        238,
+        446,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/02.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.296356201171875,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.657100445324097,
+      "sourceBounds": [
+        7,
+        265,
+        852,
+        823
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 1.0194360510139933,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        68,
+        235,
+        444,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/03.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3656883239746094,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7337389973210868,
+      "sourceBounds": [
+        71,
+        247,
+        941,
+        846
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 0.9696243870450745,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        72,
+        230,
+        440,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/04.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.37180519104003906,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6809791304226317,
+      "sourceBounds": [
+        67,
+        213,
+        903,
+        896
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 0.9278285994979019,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        86,
+        208,
+        425,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/05.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3143186569213867,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7312390731356662,
+      "sourceBounds": [
+        81,
+        245,
+        882,
+        806
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 1.0445344791073907,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        73,
+        228,
+        439,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "stalk/06.png",
+      "state": "stalk",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.32762622833251953,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5860234313163569,
+      "sourceBounds": [
+        91,
+        197,
+        918,
+        904
+      ],
+      "sharedScale": 0.4378563283922463,
+      "normalizationCorrection": 0.9149760631434452,
+      "referenceVisibleSize": [
+        368,
+        256
+      ],
+      "groupSourceMaximum": [
+        877,
+        708
+      ],
+      "outputBounds": [
+        90,
+        201,
+        421,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/01.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.38332366943359375,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.7010520734497963,
+      "sourceBounds": [
+        177,
+        93,
+        832,
+        966
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 1.0577307437344983,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        112,
+        101,
+        399,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/02.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3749275207519531,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6138017174082748,
+      "sourceBounds": [
+        135,
+        100,
+        884,
+        953
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 1.0003668943362367,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        95,
+        118,
+        417,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/03.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.38350963592529297,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6530774977263869,
+      "sourceBounds": [
+        157,
+        111,
+        872,
+        970
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 1.0202753260575015,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        99,
+        107,
+        412,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/04.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.37247467041015625,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.4992764627979158,
+      "sourceBounds": [
+        68,
+        91,
+        960,
+        966
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 0.905226620413874,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        82,
+        144,
+        429,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/05.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.3936748504638672,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.6905101235162658,
+      "sourceBounds": [
+        139,
+        93,
+        822,
+        966
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 1.0359195198955757,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        106,
+        101,
+        405,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "bury/06.png",
+      "state": "bury",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "backgroundPalette": [],
+      "borderCoverage": 1,
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.40666961669921875,
+      "backgroundLikeForegroundRatio": 0,
+      "rectangularFill": 0.5623569130136625,
+      "sourceBounds": [
+        95,
+        89,
+        946,
+        978
+      ],
+      "sharedScale": 0.43001119820828665,
+      "normalizationCorrection": 0.9199276543515922,
+      "referenceVisibleSize": [
+        315.5,
+        376
+      ],
+      "groupSourceMaximum": [
+        893,
+        890
+      ],
+      "outputBounds": [
+        88,
+        133,
+        424,
+        484
+      ]
+    },
+    {
+      "ok": true,
+      "name": "core-ip/core-ip.png",
+      "state": "core-ip",
+      "cutoutBackend": "apple-vision",
+      "cutoutCached": true,
+      "cutoutAttempts": [],
+      "backgroundInput": "real-alpha",
+      "sourceSize": [
+        1024,
+        1024
+      ],
+      "foregroundRatio": 0.44554805755615234,
+      "rectangularFill": 0.7645032596742944,
+      "sourceBounds": [
+        197,
+        79,
+        872,
+        982
+      ],
+      "sharedScale": 0.4247787610619469,
+      "outputBounds": [
+        113,
+        101,
+        399,
+        484
+      ]
+    }
+  ]
+}
