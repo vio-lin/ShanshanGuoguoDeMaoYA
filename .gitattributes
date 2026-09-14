@@ -1,0 +1,13 @@
+# 统一 LF 行尾，保证跨平台文件哈希一致（模板契约校验依赖）
+* text=auto eol=lf
+
+# 二进制文件不转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.dmg binary
+*.zip binary
+*.exe binary
