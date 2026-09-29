@@ -379,20 +379,26 @@ let updateCheckCache: { at: number; result: UpdateInfo | null } | null = null;
 async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
   const now = Date.now();
   if (updateCheckCache && now - updateCheckCache.at < 5 * 60 * 1000) {
+    console.log('[update] cache hit');
     return updateCheckCache.result;
   }
   const currentVersion = app.getVersion();
-  const result = await fetchUpdateFromApi(currentVersion) ?? await fetchUpdateFromAtom(currentVersion);
-  if (result) updateCheckCache = { at: now, result }; // 只缓存成功结果，失败不缓存以便重试
+  console.log('[update] start check, current=' + currentVersion);
+  const apiResult = await fetchUpdateFromApi(currentVersion);
+  console.log('[update] api =>', apiResult ? 'ok(latest=' + apiResult.latestVersion + ')' : 'null');
+  const result = apiResult ?? await fetchUpdateFromAtom(currentVersion);
+  console.log('[update] final =>', result ? 'ok(latest=' + result.latestVersion + ', hasUpdate=' + result.hasUpdate + ')' : 'null (both failed)');
+  if (result) updateCheckCache = { at: now, result };
   return result;
 }
 
 async function fetchUpdateFromApi(currentVersion: string): Promise<UpdateInfo | null> {
   try {
     const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': spec.app.name },
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': `ShanshanGuoguoDeMaoYA/${app.getVersion()}` },
       signal: AbortSignal.timeout(10000),
     });
+    console.log('[update] api status:', response.status);
     if (response.status === 404) {
       return { currentVersion, latestVersion: currentVersion, hasUpdate: false, releaseUrl: '', downloadUrl: null, notes: '' };
     }
@@ -420,7 +426,8 @@ async function fetchUpdateFromApi(currentVersion: string): Promise<UpdateInfo | 
       downloadUrl: match?.browser_download_url ?? null,
       notes: typeof release.body === 'string' ? release.body : '',
     };
-  } catch {
+  } catch (err) {
+    console.log('[update] api error:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
@@ -429,10 +436,11 @@ async function fetchUpdateFromApi(currentVersion: string): Promise<UpdateInfo | 
 async function fetchUpdateFromAtom(currentVersion: string): Promise<UpdateInfo | null> {
   try {
     const response = await fetch(`https://github.com/${UPDATE_REPO}/releases.atom`, {
-      headers: { 'User-Agent': spec.app.name },
+      headers: { 'User-Agent': `ShanshanGuoguoDeMaoYA/${app.getVersion()}` },
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) return null;
+    console.log('[update] atom status:', response.status);
     const xml = await response.text();
     const entryMatch = /<entry>([\s\S]*?)<\/entry>/.exec(xml);
     const entry = entryMatch?.[1] ?? '';
@@ -449,7 +457,8 @@ async function fetchUpdateFromAtom(currentVersion: string): Promise<UpdateInfo |
       downloadUrl: null,
       notes: '',
     };
-  } catch {
+  } catch (err) {
+    console.log('[update] atom error:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
