@@ -383,7 +383,7 @@ async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
   }
   const currentVersion = app.getVersion();
   const result = await fetchUpdateFromApi(currentVersion) ?? await fetchUpdateFromAtom(currentVersion);
-  updateCheckCache = { at: now, result };
+  if (result) updateCheckCache = { at: now, result }; // 只缓存成功结果，失败不缓存以便重试
   return result;
 }
 
