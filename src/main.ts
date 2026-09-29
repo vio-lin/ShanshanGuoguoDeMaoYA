@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import { copyFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -419,20 +419,31 @@ function showUpdateNotification(title: string, body: string, url: string | null)
   notification.show();
 }
 
+async function promptUpdateFeedback(title: string, body: string, url: string | null): Promise<void> {
+  if (app.isPackaged) {
+    showUpdateNotification(title, body, url);
+    return;
+  }
+  // 开发预览（未打包）时 macOS 通知权限不稳定，用弹窗保证反馈可见
+  const buttons = url ? ['打开下载页', '关闭'] : ['好的'];
+  const result = await dialog.showMessageBox({ type: 'info', title, message: body, buttons, defaultId: url ? 1 : 0 });
+  if (url && result.response === 0) void shell.openExternal(url);
+}
+
 async function promptCheckUpdate(): Promise<void> {
   const info = await fetchLatestUpdate();
   if (!info) {
-    showUpdateNotification('检查更新失败', '暂时无法访问更新服务，请稍后再试', null);
+    await promptUpdateFeedback('检查更新失败', '暂时无法访问更新服务，请稍后再试', null);
     return;
   }
   if (!info.hasUpdate) {
-    showUpdateNotification('已是最新版本', `当前版本 v${info.currentVersion}`, null);
+    await promptUpdateFeedback('已是最新版本', `当前版本 v${info.currentVersion}`, null);
     return;
   }
   const platformName = process.platform === 'darwin' ? 'macOS' : 'Windows';
-  showUpdateNotification(
+  await promptUpdateFeedback(
     `发现新版本 v${info.latestVersion}`,
-    `当前 v${info.currentVersion} → 最新 v${info.latestVersion}（${platformName}），点击下载`,
+    `当前 v${info.currentVersion} → 最新 v${info.latestVersion}（${platformName}）`,
     info.releaseUrl,
   );
 }
