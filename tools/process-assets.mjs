@@ -441,9 +441,13 @@ const selectedIncludesCore = states.some((state) => state.frames.includes(spec.c
 if (!failures.length && (!selectedStateId || selectedIncludesCore)) {
   const trayPath = path.join(trayDir, 'tray-icon.png');
   const corePath = path.join(outputDir, spec.character.coreAsset);
-  const trimmed = await sharp(corePath).trim({ threshold: 8 }).resize(28, 28, { fit: 'contain', kernel: sharp.kernel.lanczos3 }).png().toBuffer();
+  // 托盘图标：主体缩小到 24×24 并居中，四周保留 4px 透明边距，避免深色毛发贴边形成黑边
+  const trimmed = await sharp(corePath).trim({ threshold: 8 }).resize(24, 24, { fit: 'contain', kernel: sharp.kernel.lanczos3 }).png().toBuffer();
+  const trimmedMeta = await sharp(trimmed).metadata();
+  const left = Math.round((32 - (trimmedMeta.width ?? 24)) / 2);
+  const top = Math.round((32 - (trimmedMeta.height ?? 24)) / 2);
   await sharp({ create: { width: 32, height: 32, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite([{ input: trimmed, left: 2, top: 2 }]).png({ compressionLevel: 9 }).toFile(trayPath);
+    .composite([{ input: trimmed, left, top }]).png({ compressionLevel: 9 }).toFile(trayPath);
   const metadata = await sharp(trayPath).metadata();
   trayIcon = { path: path.relative(process.cwd(), trayPath).replaceAll('\\', '/'), width: metadata.width, height: metadata.height };
 }
