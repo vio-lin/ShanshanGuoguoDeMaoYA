@@ -99,3 +99,9 @@ npm run test:dev-smoke       # 冒烟测试
 - 启动失败定位：`npm run dev` 报 `Electron Forge exited before runtime became ready` 时，先查锁文件，再 `npx electron .` 看是否静默退出。
 - 素材换源后忘记 `rm -rf .build/semantic-cutouts` 会得到旧图结果。
 - 新帧数/帧序改动后，`pet-spec.json` 的 `states[].frames` 必须同步（blink 必须恰好 5 帧）。
+
+## 7. Git 提交与 CI 发布
+
+- **普通提交（非版本更新）**：commit message 末尾加 `[skip ci]`，避免每次改图/改代码都触发 GitHub Actions 双平台构建。
+- **版本发布提交**：bump 版本号的提交**禁止带** `[skip ci]`——GitHub 对含 `[skip ci]` 的提交会跳过 push/tag 触发的全部 workflow（tag 的 release job 依赖它）。已踩坑：v1.0.1 首推 tag 因 `[skip ci]` 被跳过，需改用无 `[skip ci]` 的发布提交重建 tag 才能触发构建。
+- 发布流程：改 `package.json` / `package-lock.json` / `pet-spec.json` 版本号（三处一致）→ 同步 `.doubao-pet-builder.json` 受保护哈希 → `npm run check` → 提交（不带 skip ci）→ 打 `vX.Y.Z` tag 推送（workflow `tags: ['v*']` 触发双平台构建 + Release 自动发布）。
