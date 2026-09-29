@@ -99,6 +99,8 @@ npm run test:dev-smoke       # 冒烟测试
 - 启动失败定位：`npm run dev` 报 `Electron Forge exited before runtime became ready` 时，先查锁文件，再 `npx electron .` 看是否静默退出。
 - 素材换源后忘记 `rm -rf .build/semantic-cutouts` 会得到旧图结果。
 - 新帧数/帧序改动后，`pet-spec.json` 的 `states[].frames` 必须同步（blink 必须恰好 5 帧）。
+- **检查更新 HTTP 头必须是 ASCII**：`fetch` 的 header 值含中文会抛 `Cannot convert argument to a ByteString`（例：User-Agent 传中文应用名），导致检查更新静默失败。User-Agent 一律用英文标识 + 版本号（`ShanshanGuoguoDeMaoYA/<version>`）。
+- 检查更新链路：GitHub API（`/releases/latest`）为主，限流（403/429）或失败时降级 `releases.atom`（网页域不走 API 配额）；成功结果缓存 5 分钟，失败不缓存。调试看 `.build/dev.log` 的 `[update]` 前缀日志。
 
 ## 7. Git 提交与 CI 发布
 
