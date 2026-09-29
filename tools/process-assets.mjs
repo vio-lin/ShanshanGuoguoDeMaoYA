@@ -442,7 +442,7 @@ if (!failures.length && (!selectedStateId || selectedIncludesCore)) {
   const trayPath = path.join(trayDir, 'tray-icon.png');
   const corePath = path.join(outputDir, spec.character.coreAsset);
   // 托盘图标：主体缩小到 24×24 并居中，四周保留 4px 透明边距，避免深色毛发贴边形成黑边
-  const trimmed = await sharp(corePath).trim({ threshold: 8 }).resize(24, 24, { fit: 'contain', kernel: sharp.kernel.lanczos3 }).png().toBuffer();
+  const trimmed = await sharp(corePath).trim({ threshold: 8 }).resize(24, 24, { fit: 'contain', kernel: sharp.kernel.lanczos3, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
   const trimmedMeta = await sharp(trimmed).metadata();
   const left = Math.round((32 - (trimmedMeta.width ?? 24)) / 2);
   const top = Math.round((32 - (trimmedMeta.height ?? 24)) / 2);
