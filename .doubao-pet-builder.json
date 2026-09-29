@@ -10,7 +10,7 @@
     "src/main/data-validation.ts": "b718a4e4648109c5c1f6d054221e5d7f010bf40bf68f98adfbafdd58d3a0baa8",
     "src/renderer/pet/state-machine.ts": "654d9258a900144db33195d6a7de8a3f95a1f434b90fea89c42d435a3b52a5fe",
     "tools/collect-release.mjs": "50d78bbd41b5a8d2435fc3bdf77359ee10a908379b5918ccb4b83dc27d0c78d7",
-    "tools/process-assets.mjs": "b250726741cc1cd68127ad989b5c925be8a7338c62a98efaf20464a2166671e4",
+    "tools/process-assets.mjs": "4ac5db519d79ec168e153f324270b4743a82c6afc4d383d878c518449911e88a",
     "tools/qa-assets.mjs": "d8aeaa1810da1499db89e39c00a29336587d27c2ad828d97f7bf34f4c14be980",
     "tools/run-build.mjs": "8f9f44e36834c4d2b1477ca73dc81a60991d8eb3ce45dfbbfb5bfcaa1ffebebe",
     "tools/run-dev.mjs": "17850e7ad9c0abe0866d8164c2e2d1d301418ea697c3282fd45ce9afbcea81f7",
