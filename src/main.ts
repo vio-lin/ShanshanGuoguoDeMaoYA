@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
 import { copyFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import specData from '../pet-spec.json';
-import type { InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus } from './shared/contracts';
+import type { InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 import { assertInteractionId, assertReminderInput, assertRuntimeFailureReport, assertRuntimeReadyReport, assertSettingsPatch, assertStringArray } from './shared/contracts';
 import { draggedBounds, snapBounds, type Point, type Rect } from './main/drag';
 import { JsonLogger } from './main/logger';
@@ -362,6 +362,81 @@ function showReminderComposer(): void {
   reminderWindow.webContents.send('reminder:compose');
 }
 
+const UPDATE_REPO = 'vio-lin/ShanshanGuoguoDeMaoYA';
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((part) => parseInt(part, 10) || 0);
+  const pb = b.split('.').map((part) => parseInt(part, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': spec.app.name },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.status === 404) {
+      const current = app.getVersion();
+      return { currentVersion: current, latestVersion: current, hasUpdate: false, releaseUrl: '', downloadUrl: null, notes: '' };
+    }
+    if (!response.ok) return null;
+    const release = await response.json() as {
+      tag_name?: unknown;
+      html_url?: unknown;
+      body?: unknown;
+      assets?: Array<{ name?: unknown; browser_download_url?: unknown }>;
+    };
+    if (typeof release.tag_name !== 'string' || typeof release.html_url !== 'string') return null;
+    const latestVersion = release.tag_name.replace(/^v/, '');
+    const currentVersion = app.getVersion();
+    const assets = Array.isArray(release.assets)
+      ? release.assets.filter((asset): asset is { name: string; browser_download_url: string } =>
+          typeof asset.name === 'string' && typeof asset.browser_download_url === 'string')
+      : [];
+    const isMac = process.platform === 'darwin';
+    const match = assets.find((asset) => (isMac ? asset.name.endsWith('.dmg') : /\.exe$/.test(asset.name)));
+    return {
+      currentVersion,
+      latestVersion,
+      hasUpdate: compareVersions(latestVersion, currentVersion) > 0,
+      releaseUrl: release.html_url,
+      downloadUrl: match?.browser_download_url ?? null,
+      notes: typeof release.body === 'string' ? release.body : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function showUpdateNotification(title: string, body: string, url: string | null): void {
+  const notification = new Notification({ title, body });
+  if (url) notification.on('click', () => void shell.openExternal(url));
+  notification.show();
+}
+
+async function promptCheckUpdate(): Promise<void> {
+  const info = await fetchLatestUpdate();
+  if (!info) {
+    showUpdateNotification('检查更新失败', '暂时无法访问更新服务，请稍后再试', null);
+    return;
+  }
+  if (!info.hasUpdate) {
+    showUpdateNotification('已是最新版本', `当前版本 v${info.currentVersion}`, null);
+    return;
+  }
+  const platformName = process.platform === 'darwin' ? 'macOS' : 'Windows';
+  showUpdateNotification(
+    `发现新版本 v${info.latestVersion}`,
+    `当前 v${info.currentVersion} → 最新 v${info.latestVersion}（${platformName}），点击下载`,
+    info.releaseUrl,
+  );
+}
+
 function showDashboard(): void {
   if (!spec.features.dashboard || !dashboardWindow) return;
   dashboardWindow.center();
@@ -387,6 +462,7 @@ function buildPetMenu(): Electron.MenuItemConstructorOptions[] {
   items.push({ type: 'separator' });
   items.push({ label: settings.clickThrough ? '🖱️ 关闭鼠标穿透' : '🖱️ 开启鼠标穿透', click: () => void saveSettings({ ...settings, clickThrough: !settings.clickThrough }) });
   items.push({ label: '🙈 隐藏桌宠', click: () => petWindow?.hide() });
+  items.push({ label: '🔄 检查更新', click: () => void promptCheckUpdate() });
   return items;
 }
 
@@ -401,6 +477,7 @@ function createTray(): void {
     { label: `🐾 显示${spec.character.displayName}`, click: () => petWindow?.show() },
     { label: `🏠 ${spec.character.displayName}的小屋`, click: showDashboard },
     { label: settings.clickThrough ? '🖱️ 关闭鼠标穿透' : '🖱️ 开启鼠标穿透', click: () => void saveSettings({ ...settings, clickThrough: !settings.clickThrough }) },
+    { label: '🔄 检查更新', click: () => void promptCheckUpdate() },
     { type: 'separator' },
     { label: '🚪 退出', click: () => { isQuitting = true; app.quit(); } },
   ]));
@@ -620,6 +697,21 @@ function registerIpc(): void {
   ipcMain.handle('window:hide-reminder', (event) => { assertSender(event, ['reminder']); reminderWindow?.hide(); });
   ipcMain.handle('window:hide-dashboard', (event) => { assertSender(event, ['dashboard']); dashboardWindow?.hide(); });
   ipcMain.handle('window:hide-pet', (event) => { assertSender(event, ['pet', 'dashboard']); petWindow?.hide(); });
+  ipcMain.handle('update:check', async (event) => {
+    assertSender(event, ['pet', 'dashboard']);
+    return fetchLatestUpdate();
+  });
+  ipcMain.handle('update:open', (event, url: unknown) => {
+    assertSender(event, ['pet', 'dashboard']);
+    if (typeof url !== 'string') return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:' || !/^(github\.com|objects\.githubusercontent\.com)$/.test(parsed.hostname)) return;
+      void shell.openExternal(url);
+    } catch {
+      // 忽略非法 URL
+    }
+  });
 }
 
 async function initialize(): Promise<void> {

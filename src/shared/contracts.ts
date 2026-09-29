@@ -163,6 +163,15 @@ export interface TypingStatus {
   reason: string;
 }
 
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  hasUpdate: boolean;
+  releaseUrl: string;
+  downloadUrl: string | null;
+  notes: string;
+}
+
 export interface PetAPI {
   settings: {
     get: () => Promise<Settings>;
@@ -197,6 +206,10 @@ export interface PetAPI {
   runtime: {
     ready: (report: RuntimeReadyReport) => Promise<void>;
     fail: (report: RuntimeFailureReport) => Promise<void>;
+  };
+  update: {
+    check: () => Promise<UpdateInfo | null>;
+    open: (url: string) => Promise<void>;
   };
   events: {
     onStateActivity: (listener: (activity: StateActivity) => void) => () => void;
