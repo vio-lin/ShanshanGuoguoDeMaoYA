@@ -374,16 +374,29 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+let updateCheckCache: { at: number; result: UpdateInfo | null } | null = null;
+
 async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
+  const now = Date.now();
+  if (updateCheckCache && now - updateCheckCache.at < 5 * 60 * 1000) {
+    return updateCheckCache.result;
+  }
+  const currentVersion = app.getVersion();
+  const result = await fetchUpdateFromApi(currentVersion) ?? await fetchUpdateFromAtom(currentVersion);
+  updateCheckCache = { at: now, result };
+  return result;
+}
+
+async function fetchUpdateFromApi(currentVersion: string): Promise<UpdateInfo | null> {
   try {
     const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': spec.app.name },
       signal: AbortSignal.timeout(10000),
     });
     if (response.status === 404) {
-      const current = app.getVersion();
-      return { currentVersion: current, latestVersion: current, hasUpdate: false, releaseUrl: '', downloadUrl: null, notes: '' };
+      return { currentVersion, latestVersion: currentVersion, hasUpdate: false, releaseUrl: '', downloadUrl: null, notes: '' };
     }
+    if (response.status === 403 || response.status === 429) return null; // API 限流，降级到 Atom
     if (!response.ok) return null;
     const release = await response.json() as {
       tag_name?: unknown;
@@ -393,7 +406,6 @@ async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
     };
     if (typeof release.tag_name !== 'string' || typeof release.html_url !== 'string') return null;
     const latestVersion = release.tag_name.replace(/^v/, '');
-    const currentVersion = app.getVersion();
     const assets = Array.isArray(release.assets)
       ? release.assets.filter((asset): asset is { name: string; browser_download_url: string } =>
           typeof asset.name === 'string' && typeof asset.browser_download_url === 'string')
@@ -407,6 +419,35 @@ async function fetchLatestUpdate(): Promise<UpdateInfo | null> {
       releaseUrl: release.html_url,
       downloadUrl: match?.browser_download_url ?? null,
       notes: typeof release.body === 'string' ? release.body : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// API 限流时降级到 Releases Atom feed（网页域，不走 API 配额）
+async function fetchUpdateFromAtom(currentVersion: string): Promise<UpdateInfo | null> {
+  try {
+    const response = await fetch(`https://github.com/${UPDATE_REPO}/releases.atom`, {
+      headers: { 'User-Agent': spec.app.name },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return null;
+    const xml = await response.text();
+    const entryMatch = /<entry>([\s\S]*?)<\/entry>/.exec(xml);
+    const entry = entryMatch?.[1] ?? '';
+    const titleMatch = /<title>([^<]*)<\/title>/.exec(entry);
+    const linkMatch = /<link[^>]*href="([^"]*\/releases\/tag\/[^"]*)"[^>]*\/>/.exec(entry);
+    const latestVersion = titleMatch?.[1]?.replace(/^v/, '')?.trim();
+    const releaseUrl = linkMatch?.[1];
+    if (!latestVersion || !releaseUrl) return null;
+    return {
+      currentVersion,
+      latestVersion,
+      hasUpdate: compareVersions(latestVersion, currentVersion) > 0,
+      releaseUrl,
+      downloadUrl: null,
+      notes: '',
     };
   } catch {
     return null;
