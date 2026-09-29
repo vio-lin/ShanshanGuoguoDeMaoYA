@@ -3,7 +3,7 @@
   "app": {
     "name": "布偶猫桌宠",
     "appId": "com.doubao.ragdollpet",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "language": "zh-CN"
   },
   "targets": {
