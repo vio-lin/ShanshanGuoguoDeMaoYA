@@ -1,7 +1,7 @@
 {
   "name": "com-doubao-ragdollpet",
   "productName": "布偶猫桌宠",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Secure cross-platform Electron desktop pet",
   "main": ".webpack/main",
   "private": true,
