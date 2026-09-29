@@ -11,7 +11,7 @@
 core-ip（唯一身份母版）
    │  image_edit 逐状态生成（提示词见 §2，一次生成整个状态的全部帧）
    ▼
-incoming-assets/<state>/NN.png   ← 2048×2048 原图（AI 输出：纯白底不透明）
+incoming-assets/<state>/NN.png   ← 2048×2048 原图（AI 输出：纯白底不透明，⚠️ 不在 git 跟踪内，重跑处理前需自行准备原图目录）
    │  npm run process:assets -- --state <state>
    │    （Apple Vision 语义分割抠图 → 统一 512×512 → 脚底锚点归一化）
    ▼
