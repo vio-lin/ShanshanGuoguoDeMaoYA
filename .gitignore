@@ -8,3 +8,4 @@ qa/*
 *.log
 .DS_Store
 Thumbs.db
+incoming-assets/
