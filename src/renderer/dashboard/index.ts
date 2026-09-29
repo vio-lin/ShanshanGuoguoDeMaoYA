@@ -1,5 +1,5 @@
 import spec from '../../../pet-spec.json';
-import type { PetSpec, PetStats, Settings, InteractionSpec } from '../../shared/contracts';
+import type { PetSpec, PetStats, Settings, InteractionSpec, UpdateInfo } from '../../shared/contracts';
 import './index.css';
 
 // 用于 asset link 检查的占位符（实际不需要导入所有图片）
@@ -186,23 +186,54 @@ async function loadUpdateInfo(): Promise<void> {
   const statusEl = document.getElementById('update-status');
   const btn = document.getElementById('update-btn') as HTMLButtonElement | null;
   if (!versionEl || !statusEl || !btn) return;
-  const info = await window.petAPI?.update.check();
-  if (info) versionEl.textContent = `v${info.currentVersion}`;
+  const version = versionEl;
+  const status = statusEl;
+
+  function applyState(info: UpdateInfo | null | undefined): void {
+    if (!info) {
+      version.textContent = '未知版本（检查失败）';
+      return;
+    }
+    if (info.hasUpdate) {
+      version.textContent = `v${info.currentVersion}（发现新版本 v${info.latestVersion}）`;
+    } else {
+      version.textContent = `v${info.currentVersion}（已是最新版本）`;
+    }
+  }
+
+  try {
+    const info = await window.petAPI?.update.check();
+    applyState(info);
+  } catch (error) {
+    console.error('Failed to check update:', error);
+    applyState(null);
+  }
+
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    statusEl.style.display = 'block';
-    statusEl.textContent = '正在检查…';
-    const result = await window.petAPI?.update.check();
-    if (!result) {
-      statusEl.textContent = '检查失败：无法访问更新服务，请稍后再试';
-    } else if (result.hasUpdate) {
-      const target = result.downloadUrl || result.releaseUrl;
-      statusEl.textContent = `发现新版本 v${result.latestVersion}，正在打开下载页…`;
-      await window.petAPI?.update.open(target);
-    } else {
-      statusEl.textContent = `已是最新版本（v${result.currentVersion}）`;
+    status.style.display = 'block';
+    status.textContent = '正在检查…';
+    try {
+      const result = await window.petAPI?.update.check();
+      if (!result) {
+        status.textContent = '检查失败：无法访问更新服务，请稍后再试';
+        applyState(null);
+      } else if (result.hasUpdate) {
+        const target = result.downloadUrl || result.releaseUrl;
+        status.textContent = `发现新版本 v${result.latestVersion}，正在打开下载页…`;
+        await window.petAPI?.update.open(target);
+        applyState(result);
+      } else {
+        status.textContent = `已是最新版本（v${result.currentVersion}）`;
+        applyState(result);
+      }
+    } catch (error) {
+      console.error('Failed to check update:', error);
+      status.textContent = '检查失败：无法访问更新服务，请稍后再试';
+      applyState(null);
+    } finally {
+      btn.disabled = false;
     }
-    btn.disabled = false;
   });
 }
 
