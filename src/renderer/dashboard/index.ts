@@ -181,11 +181,37 @@ window.petAPI?.events.onStats((stats: PetStats) => {
   updateStats(stats);
 });
 
+async function loadUpdateInfo(): Promise<void> {
+  const versionEl = document.getElementById('update-version');
+  const statusEl = document.getElementById('update-status');
+  const btn = document.getElementById('update-btn') as HTMLButtonElement | null;
+  if (!versionEl || !statusEl || !btn) return;
+  const info = await window.petAPI?.update.check();
+  if (info) versionEl.textContent = `v${info.currentVersion}`;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    statusEl.style.display = 'block';
+    statusEl.textContent = '正在检查…';
+    const result = await window.petAPI?.update.check();
+    if (!result) {
+      statusEl.textContent = '检查失败：无法访问更新服务，请稍后再试';
+    } else if (result.hasUpdate) {
+      const target = result.downloadUrl || result.releaseUrl;
+      statusEl.textContent = `发现新版本 v${result.latestVersion}，正在打开下载页…`;
+      await window.petAPI?.update.open(target);
+    } else {
+      statusEl.textContent = `已是最新版本（v${result.currentVersion}）`;
+    }
+    btn.disabled = false;
+  });
+}
+
 // 初始化
 async function init(): Promise<void> {
   await loadInteractions();
   await loadSettings();
   await loadStats();
+  await loadUpdateInfo();
 }
 
 init();

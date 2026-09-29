@@ -200,6 +200,27 @@
       background: var(--accent, #ffc987);
       color: var(--text, #3a2a20);
     }
+    .update-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 10px;
+      background: var(--primary, #ff8a24);
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .update-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 138, 36, 0.3);
+    }
+    .update-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
     .content-scroll {
       flex: 1;
       overflow-y: auto;
@@ -280,6 +301,18 @@
               <button class="size-btn" data-scale="1.2">超大</button>
             </div>
           </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="section-title">🔄 更新</div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">当前版本</div>
+              <div class="setting-desc" id="update-version">检查中…</div>
+            </div>
+            <button class="update-btn" id="update-btn">检查更新</button>
+          </div>
+          <div class="setting-desc" id="update-status" style="margin-top: 8px; display: none;"></div>
         </div>
       </div>
     </div>
