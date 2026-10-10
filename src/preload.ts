@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { InteractionResult, InteractionSpec, PetAPI, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
+import type { InteractionResult, InteractionSpec, PetAPI, PetStats, PetSummary, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 
 function subscribe<T>(channel: string, listener: (value: T) => void): () => void {
   const wrapped = (_event: Electron.IpcRendererEvent, value: T) => listener(value);
@@ -46,12 +46,17 @@ const api: PetAPI = {
     check: () => ipcRenderer.invoke('update:check') as Promise<UpdateInfo | null>,
     open: (url) => ipcRenderer.invoke('update:open', url) as Promise<void>,
   },
+  pets: {
+    list: () => ipcRenderer.invoke('pets:list') as Promise<PetSummary[]>,
+    activate: (petId) => ipcRenderer.invoke('pets:activate', petId) as Promise<boolean>,
+  },
   events: {
     onStateActivity: (listener) => subscribe<StateActivity>('state:activity', listener),
     onReminder: (listener) => subscribe<Reminder>('reminder:due', listener),
     onReminderCompose: (listener) => subscribe<void>('reminder:compose', listener),
     onStats: (listener) => subscribe<PetStats>('pet:stats', listener),
     onTypingStatus: (listener) => subscribe<TypingStatus>('typing:status', listener),
+    onPetChanged: (listener) => subscribe<string>('pet:changed', listener),
   },
 };
 

@@ -1,26 +1,24 @@
-import spec from '../../../pet-spec.json';
 import type { PetSpec, PetStats, Settings, InteractionSpec, UpdateInfo } from '../../shared/contracts';
+import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import './index.css';
 
-// 用于 asset link 检查的占位符（实际不需要导入所有图片）
-// require.context('../../assets/pet', true, /\.png$/);
+let petSpec: PetSpec = PET_PROFILES[0]!.spec;
 
-const petSpec = spec as PetSpec;
-document.title = `${petSpec.character.displayName}的小屋`;
+function applyPetIdentity(): void {
+  document.title = `${petSpec.character.displayName}的小屋`;
+  document.getElementById('pet-name')!.textContent = petSpec.character.displayName;
+  document.getElementById('pet-personality')!.textContent = petSpec.character.personality.join('、');
+  const theme = petSpec.experience.theme;
+  document.documentElement.style.setProperty('--primary', theme.primary);
+  document.documentElement.style.setProperty('--accent', theme.accent);
+  document.documentElement.style.setProperty('--background', theme.background);
+  document.documentElement.style.setProperty('--surface', theme.surface);
+  document.documentElement.style.setProperty('--text', theme.text);
+  document.documentElement.style.setProperty('--muted', theme.muted);
+  document.documentElement.style.setProperty('--radius', `${theme.cornerRadius}px`);
+}
 
-// 设置主题色
-const theme = petSpec.experience.theme;
-document.documentElement.style.setProperty('--primary', theme.primary);
-document.documentElement.style.setProperty('--accent', theme.accent);
-document.documentElement.style.setProperty('--background', theme.background);
-document.documentElement.style.setProperty('--surface', theme.surface);
-document.documentElement.style.setProperty('--text', theme.text);
-document.documentElement.style.setProperty('--muted', theme.muted);
-document.documentElement.style.setProperty('--radius', `${theme.cornerRadius}px`);
-
-// 设置宠物信息
-document.getElementById('pet-name')!.textContent = petSpec.character.displayName;
-document.getElementById('pet-personality')!.textContent = petSpec.character.personality.join('、');
+applyPetIdentity();
 
 const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 const affectionEl = document.getElementById('affection') as HTMLDivElement;
@@ -239,10 +237,25 @@ async function loadUpdateInfo(): Promise<void> {
 
 // 初始化
 async function init(): Promise<void> {
+  const settings = await window.petAPI?.settings.get();
+  const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
+  if (profile) {
+    petSpec = profile.spec;
+    applyPetIdentity();
+  }
   await loadInteractions();
   await loadSettings();
   await loadStats();
   await loadUpdateInfo();
 }
+
+// 监听宠物切换
+window.petAPI?.events.onPetChanged((petId) => {
+  const profile = getPetProfile(petId);
+  if (profile) {
+    petSpec = profile.spec;
+    applyPetIdentity();
+  }
+});
 
 init();

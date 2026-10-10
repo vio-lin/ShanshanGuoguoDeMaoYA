@@ -1,18 +1,28 @@
-import spec from '../../../pet-spec.json';
 import type { PetSpec, Reminder } from '../../shared/contracts';
+import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import './index.css';
 
-const petSpec = spec as PetSpec;
+let petSpec: PetSpec = PET_PROFILES[0]!.spec;
 
-// 设置主题色
-const theme = petSpec.experience.theme;
-document.documentElement.style.setProperty('--primary', theme.primary);
-document.documentElement.style.setProperty('--accent', theme.accent);
-document.documentElement.style.setProperty('--background', theme.background);
-document.documentElement.style.setProperty('--surface', theme.surface);
-document.documentElement.style.setProperty('--text', theme.text);
-document.documentElement.style.setProperty('--muted', theme.muted);
-document.documentElement.style.setProperty('--radius', `${theme.cornerRadius}px`);
+function applyTheme(): void {
+  const theme = petSpec.experience.theme;
+  document.documentElement.style.setProperty('--primary', theme.primary);
+  document.documentElement.style.setProperty('--accent', theme.accent);
+  document.documentElement.style.setProperty('--background', theme.background);
+  document.documentElement.style.setProperty('--surface', theme.surface);
+  document.documentElement.style.setProperty('--text', theme.text);
+  document.documentElement.style.setProperty('--muted', theme.muted);
+  document.documentElement.style.setProperty('--radius', `${theme.cornerRadius}px`);
+}
+
+async function init(): Promise<void> {
+  const settings = await window.petAPI?.settings.get();
+  const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
+  if (profile) {
+    petSpec = profile.spec;
+    applyTheme();
+  }
+}
 
 const textInput = document.getElementById('reminder-text') as HTMLInputElement;
 const timeInput = document.getElementById('reminder-time') as HTMLInputElement;
@@ -74,3 +84,14 @@ window.petAPI?.events.onReminderCompose(() => {
   setDefaultTime();
   textInput.focus();
 });
+
+// 监听宠物切换（主题随宠物变化）
+window.petAPI?.events.onPetChanged((petId) => {
+  const profile = getPetProfile(petId);
+  if (profile) {
+    petSpec = profile.spec;
+    applyTheme();
+  }
+});
+
+init();

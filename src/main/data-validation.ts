@@ -25,7 +25,7 @@ export function localDateKey(date = new Date()): string {
 
 export function parseSettings(value: unknown): Settings {
   const obj = record(value, 'settings');
-  const expected = new Set(['edgeSnap', 'alwaysOnTop', 'typingReaction', 'clickThrough', 'petScale']);
+  const expected = new Set(['edgeSnap', 'alwaysOnTop', 'typingReaction', 'clickThrough', 'petScale', 'currentPet']);
   for (const key of Object.keys(obj)) if (!expected.has(key)) throw new TypeError(`Unknown settings field: ${key}`);
   for (const key of ['edgeSnap', 'alwaysOnTop', 'typingReaction', 'clickThrough'] as const) {
     if (typeof obj[key] !== 'boolean') throw new TypeError(`Invalid settings field: ${key}`);
@@ -33,12 +33,16 @@ export function parseSettings(value: unknown): Settings {
   if (typeof obj.petScale !== 'number' || !Number.isFinite(obj.petScale) || !PET_SCALES.includes(obj.petScale as typeof PET_SCALES[number])) {
     throw new TypeError('Invalid settings field: petScale');
   }
+  if (obj.currentPet !== undefined && (typeof obj.currentPet !== 'string' || obj.currentPet.length > 64)) {
+    throw new TypeError('Invalid settings field: currentPet');
+  }
   return {
     edgeSnap: obj.edgeSnap as boolean,
     alwaysOnTop: obj.alwaysOnTop as boolean,
     typingReaction: obj.typingReaction as boolean,
     clickThrough: obj.clickThrough as boolean,
     petScale: obj.petScale,
+    currentPet: (obj.currentPet as string | undefined) ?? 'ragdoll',
   };
 }
 

@@ -109,12 +109,18 @@ export interface PetStats {
   lastInteractionDate: string;
 }
 
+export interface PetSummary {
+  id: string;
+  displayName: string;
+}
+
 export interface Settings {
   edgeSnap: boolean;
   alwaysOnTop: boolean;
   typingReaction: boolean;
   clickThrough: boolean;
   petScale: number;
+  currentPet: string;
 }
 
 export interface Reminder {
@@ -217,6 +223,11 @@ export interface PetAPI {
     onReminderCompose: (listener: () => void) => () => void;
     onStats: (listener: (stats: PetStats) => void) => () => void;
     onTypingStatus: (listener: (status: TypingStatus) => void) => () => void;
+    onPetChanged: (listener: (petId: string) => void) => () => void;
+  };
+  pets: {
+    list: () => Promise<PetSummary[]>;
+    activate: (petId: string) => Promise<boolean>;
   };
 }
 
@@ -253,12 +264,15 @@ export function assertSettingsPatch(value: unknown): asserts value is Partial<Se
   }
   const obj = value as Record<string, unknown>;
   const booleanKeys = new Set(['edgeSnap', 'alwaysOnTop', 'typingReaction', 'clickThrough']);
-  const allowedKeys = new Set([...booleanKeys, 'petScale']);
+  const allowedKeys = new Set([...booleanKeys, 'petScale', 'currentPet']);
   for (const [key, item] of Object.entries(obj)) {
     if (!allowedKeys.has(key)) throw new TypeError(`Unknown settings field: ${key}`);
     if (booleanKeys.has(key) && typeof item !== 'boolean') throw new TypeError(`Invalid settings field: ${key}`);
     if (key === 'petScale' && (typeof item !== 'number' || !Number.isFinite(item) || ![0.65, 0.8, 1, 1.2].includes(item))) {
       throw new TypeError('Invalid settings field: petScale');
+    }
+    if (key === 'currentPet' && (typeof item !== 'string' || item.length > 64)) {
+      throw new TypeError('Invalid settings field: currentPet');
     }
   }
 }

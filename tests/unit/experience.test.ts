@@ -20,12 +20,15 @@ test('local date keys use calendar fields instead of UTC serialization', () => {
 });
 
 test('settings accept only complete, finite, whitelisted values', () => {
-  const valid = { edgeSnap: true, alwaysOnTop: true, typingReaction: false, clickThrough: false, petScale: 0.8 };
+  const valid = { edgeSnap: true, alwaysOnTop: true, typingReaction: false, clickThrough: false, petScale: 0.8, currentPet: 'ragdoll' };
   assert.deepEqual(parseSettings(valid), valid);
+  assert.deepEqual(parseSettings({ ...valid, currentPet: undefined }), { ...valid, currentPet: 'ragdoll' });
+  assert.throws(() => parseSettings({ ...valid, currentPet: 42 }), /currentPet/);
   assert.throws(() => parseSettings({ ...valid, petScale: Number.NaN }), /petScale/);
   assert.throws(() => parseSettings({ ...valid, petScale: 0.81 }), /petScale/);
   assert.throws(() => parseSettings({ ...valid, surprise: true }), /Unknown/);
   assert.throws(() => assertSettingsPatch({ edgeSnap: 1 }), /edgeSnap/);
+  assert.throws(() => assertSettingsPatch({ currentPet: 42 }), /currentPet/);
   assert.throws(() => assertSettingsPatch({ constructor: true }), /Unknown/);
 });
 
