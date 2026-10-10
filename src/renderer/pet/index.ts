@@ -1,10 +1,8 @@
-import spec from '../../../pet-spec.json';
 import type { PetSpec, StateActivity } from '../../shared/contracts';
 import { exceedsDragThreshold } from '../../main/drag';
+import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import { PetStateMachine } from './state-machine';
 import './index.css';
-
-const petSpec = spec as PetSpec;
 
 const sprite = document.getElementById('pet-sprite') as HTMLImageElement;
 const container = document.getElementById('pet-container') as HTMLDivElement;
@@ -13,25 +11,16 @@ const feedbackBubble = document.getElementById('feedback-bubble') as HTMLDivElem
 // Chromium 会默认把 img 当作可拖拽内容；桌宠只允许窗口拖拽。
 container.addEventListener('dragstart', (event) => event.preventDefault());
 
-// Webpack 在构建时递归收集当前 spec 对应的素材，不硬编码角色或动作名。
+// Webpack 在构建时递归收集所有宠物的素材，运行时按当前宠物过滤。
 const assetMap = new Map<string, string>();
-const assetFrames = new Map<string, string[]>();
-const assetContext = require.context('../../assets/pet', true, /\.png$/i);
+const assetContext = require.context('../../pets', true, /\.png$/i);
 for (const key of assetContext.keys()) {
   assetMap.set(key.replace(/^\.\//, ''), assetContext(key));
 }
-const expectedAssetNames = [...new Set([
-  petSpec.character.coreAsset,
-  ...petSpec.states.flatMap((state) => state.frames),
-])];
 
-// 构建状态帧映射
-for (const state of petSpec.states) {
-  assetFrames.set(state.id, state.frames);
-}
-
-const stateMachine = new PetStateMachine(petSpec.states, performance.now());
-container.dataset.state = stateMachine.currentStateId();
+let petSpec: PetSpec = PET_PROFILES[0]!.spec;
+let petId: string = PET_PROFILES[0]!.id;
+let stateMachine = new PetStateMachine(petSpec.states, performance.now());
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let blinkTimer: ReturnType<typeof setTimeout> | null = null;
 let animationFrame: number | null = null;
@@ -41,13 +30,24 @@ let moveStart = 0;
 let moveDuration = 0;
 let moveState: string | null = null;
 
-// 设置呼吸动画
-const breathing = petSpec.motion.breathing;
-if (breathing.enabled) {
-  document.documentElement.style.setProperty('--breath-period', `${breathing.periodMs}ms`);
-  document.documentElement.style.setProperty('--breath-scale-x', `${1 + breathing.scaleX}`);
-  document.documentElement.style.setProperty('--breath-scale-y', `${1 + breathing.scaleY}`);
+function frameUrl(frame: string): string | undefined {
+  return assetMap.get(`${petId}/assets/${frame}`);
 }
+
+// 呼吸/回弹 CSS 变量按当前宠物 spec 设置
+function applyMotionCss(): void {
+  const breathing = petSpec.motion.breathing;
+  if (breathing.enabled) {
+    document.documentElement.style.setProperty('--breath-period', `${breathing.periodMs}ms`);
+    document.documentElement.style.setProperty('--breath-scale-x', `${1 + breathing.scaleX}`);
+    document.documentElement.style.setProperty('--breath-scale-y', `${1 + breathing.scaleY}`);
+  }
+  const squash = petSpec.motion.squashStretch;
+  document.documentElement.style.setProperty('--squash-duration', `${squash.durationMs}ms`);
+  document.documentElement.style.setProperty('--squash-intensity', `${squash.intensity}`);
+}
+
+container.dataset.state = stateMachine.currentStateId();
 
 // 挤压回弹
 function playSquash(): void {
@@ -74,8 +74,8 @@ function setState(stateId: string, durationMs?: number): void {
   if (!stateMachine.start(stateId, performance.now(), durationMs)) return;
   const snapshot = stateMachine.tick(performance.now());
   container.dataset.state = snapshot.stateId;
-  const frameUrl = assetMap.get(snapshot.frame);
-  if (frameUrl) sprite.src = frameUrl;
+  const url = frameUrl(snapshot.frame);
+  if (url) sprite.src = url;
   // 记录移动状态开始时间
   if (stateId === 'walk' || stateId === 'stalk') {
     moveStart = performance.now();
@@ -91,8 +91,8 @@ function animate(timestamp: number): void {
   const snapshot = stateMachine.tick(timestamp);
   container.dataset.state = snapshot.stateId;
   if (snapshot.stateChanged) {
-    const frameUrl = assetMap.get(snapshot.frame);
-    if (frameUrl) sprite.src = frameUrl;
+    const url = frameUrl(snapshot.frame);
+    if (url) sprite.src = url;
   }
 
   let dx = 0, dy = 0, flip = false;
@@ -235,12 +235,41 @@ window.petAPI?.events.onStateActivity((activity: StateActivity) => {
   }
 });
 
+// 切换当前宠物（重建状态机并回到 idle）
+function switchPet(nextPetId: string): void {
+  const profile = getPetProfile(nextPetId);
+  if (!profile || profile.id === petId) return;
+  petId = profile.id;
+  petSpec = profile.spec;
+  stateMachine = new PetStateMachine(petSpec.states, performance.now());
+  applyMotionCss();
+  container.dataset.state = stateMachine.currentStateId();
+  const firstFrame = petSpec.states.find((state) => state.id === 'idle')?.frames[0];
+  if (firstFrame) {
+    const url = frameUrl(firstFrame);
+    if (url) sprite.src = url;
+  }
+  moveState = null;
+  scheduleIdleEvents();
+  playSquash();
+}
+
 // 初始化
 async function init(): Promise<void> {
   try {
+    const settings = await window.petAPI?.settings.get();
+    const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
+    if (profile && profile.id !== petId) {
+      petId = profile.id;
+      petSpec = profile.spec;
+      stateMachine = new PetStateMachine(petSpec.states, performance.now());
+      applyMotionCss();
+      container.dataset.state = stateMachine.currentStateId();
+    }
     // 所有运行素材必须真实解码成功后才能报告 ready。
-    const loadedAssets = await Promise.all(expectedAssetNames.map((name) => new Promise<HTMLImageElement>((resolve, reject) => {
-      const url = assetMap.get(name);
+    const expectedAssets = [...new Set([petSpec.character.coreAsset, ...petSpec.states.flatMap((state) => state.frames)])];
+    const loadedAssets = await Promise.all(expectedAssets.map((name) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = frameUrl(name);
       if (!url) {
         reject(new Error(`Missing runtime asset: ${name}`));
         return;
@@ -269,7 +298,7 @@ async function init(): Promise<void> {
       stateId: 'idle',
       frame: petSpec.states.find((s) => s.id === 'idle')?.frames[0] ?? '',
       assetCount: loadedAssets.length,
-      expectedAssetCount: expectedAssetNames.length,
+      expectedAssetCount: expectedAssets.length,
       naturalWidth: reference.naturalWidth,
       naturalHeight: reference.naturalHeight,
       petVisible: true,
@@ -281,5 +310,10 @@ async function init(): Promise<void> {
     }).catch(() => {});
   }
 }
+
+// 监听宠物切换
+window.petAPI?.events.onPetChanged((nextPetId) => {
+  switchPet(nextPetId);
+});
 
 init();

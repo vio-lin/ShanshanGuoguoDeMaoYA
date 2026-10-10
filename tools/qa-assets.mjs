@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -6,20 +6,11 @@ import sharp from 'sharp';
 const root = process.cwd();
 const argumentsMap = {};
 for (let index = 2; index < process.argv.length; index += 2) argumentsMap[process.argv[index].replace(/^--/, '')] = process.argv[index + 1];
-const spec = JSON.parse(await readFile(path.join(root, 'pet-spec.json'), 'utf8'));
-const assetDir = path.resolve(root, argumentsMap.assets ?? path.join('src', 'assets', 'pet'));
 const qaDir = path.resolve(root, argumentsMap.qa ?? 'qa');
 await mkdir(qaDir, { recursive: true });
 const records = [];
 const regressionFixture = await readFile(path.join(root, 'REGRESSION_FIXTURE_ONLY.txt'), 'utf8').then(() => true, () => false);
-const targetOccupancy = Number(spec.assetPipeline?.targetOccupancy ?? 0.78);
 const selectedStateId = argumentsMap.state;
-const runtimeStates = selectedStateId ? spec.states.filter((state) => state.id === selectedStateId) : spec.states;
-if (selectedStateId && runtimeStates.length !== 1) throw new Error(`Unknown asset state: ${selectedStateId}`);
-const coreIsRuntimeFrame = spec.states.some((state) => state.frames.includes(spec.character.coreAsset));
-const states = !selectedStateId && !coreIsRuntimeFrame
-  ? [{ id: 'core-ip', frames: [spec.character.coreAsset], triggers: [], anchor: { x: 0.5, y: 0.95 } }, ...runtimeStates]
-  : runtimeStates;
 
 const REPAIRS = {
   INVALID_DIMENSIONS: 'Run process:assets for this state; delivered frames must be 512x512 RGBA.',
@@ -137,136 +128,173 @@ function coloredGroundEvidence(data, width, height, bounds, mainPixels) {
   });
 }
 
-for (const state of states) {
-  for (const frame of state.frames) {
-    const errors = [];
-    const diagnostics = [];
-    const file = path.join(assetDir, frame);
-    try {
-      const fileBytes = await readFile(file);
-      const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      if (info.width !== 512 || info.height !== 512 || info.channels !== 4) addDiagnostic(errors, diagnostics, 'INVALID_DIMENSIONS', 'must be 512x512 RGBA');
-      let transparent = 0;
-      let opaque = 0;
-      let minX = info.width;
-      let minY = info.height;
-      let maxX = -1;
-      let maxY = -1;
-      let borderPixels = 0;
-      for (let y = 0; y < info.height; y += 1) for (let x = 0; x < info.width; x += 1) {
-        const alpha = data[(y * info.width + x) * 4 + 3];
-        if (alpha === 0) transparent += 1;
-        if (alpha >= 16) {
-          opaque += 1; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-          if (x === 0 || y === 0 || x === info.width - 1 || y === info.height - 1) borderPixels += 1;
-        }
+// 检查目标：多宠物模式遍历 src/pets/*；显式 --pets=0 或不存在时回退旧单宠物路径。
+async function resolveTargets() {
+  const petsRoot = path.join(root, 'src', 'pets');
+  const usePets = argumentsMap.pets !== '0';
+  const targets = [];
+  if (usePets) {
+    let entries = [];
+    try { entries = (await readdir(petsRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory()); } catch { entries = []; }
+    if (entries.length) {
+      for (const entry of entries) {
+        const specPath = path.join(petsRoot, entry.name, 'pet-spec.json');
+        const spec = JSON.parse(await readFile(specPath, 'utf8'));
+        targets.push({ petId: entry.name, spec, assetDir: path.resolve(petsRoot, entry.name, 'assets') });
       }
-      if (transparent === 0) addDiagnostic(errors, diagnostics, 'NO_TRANSPARENCY', 'no transparent pixels');
-      if (opaque === 0) addDiagnostic(errors, diagnostics, 'EMPTY_FOREGROUND', 'no visible foreground');
-      if (borderPixels > 0) addDiagnostic(errors, diagnostics, 'SUBJECT_TOUCHES_BORDER', `foreground touches canvas border (${borderPixels} pixels)`);
-      if (opaque > 0) {
-        const centerX = ((minX + maxX) / 2) / 511;
-        const bottomY = maxY / 511;
-        if (Math.abs(centerX - state.anchor.x) > 0.04) addDiagnostic(errors, diagnostics, 'ANCHOR_DRIFT', `horizontal anchor drift: ${centerX.toFixed(3)}`);
-        if (Math.abs(bottomY - state.anchor.y) > 0.02) addDiagnostic(errors, diagnostics, 'ANCHOR_DRIFT', `bottom anchor drift: ${bottomY.toFixed(3)}`);
-        const occupancy = Math.max(maxX - minX + 1, maxY - minY + 1) / 512;
-        if (occupancy > targetOccupancy + 0.025) addDiagnostic(errors, diagnostics, 'OCCUPANCY_TOO_LARGE', `visible subject exceeds target occupancy: ${occupancy.toFixed(3)}`);
-        const boundsArea = (maxX - minX + 1) * (maxY - minY + 1);
-        const rectangularFill = opaque / Math.max(1, boundsArea);
-        if (rectangularFill > 0.94 && boundsArea > info.width * info.height * 0.04) {
-          addDiagnostic(errors, diagnostics, 'SOLID_BLOCK', `foreground bounding box is ${(rectangularFill * 100).toFixed(1)}% opaque`);
-        }
-      }
-      const bounds = opaque ? [minX, minY, maxX, maxY] : null;
-      const components = componentsOf(data, info.width, info.height);
-      const main = components[0];
-      const detachedGround = main && components.slice(1).find((component) => {
-        const width = component.bounds[2] - component.bounds[0] + 1;
-        const height = component.bounds[3] - component.bounds[1] + 1;
-        const mainWidth = main.bounds[2] - main.bounds[0] + 1;
-        const mainHeight = main.bounds[3] - main.bounds[1] + 1;
-        return component.pixels >= Math.max(96, main.pixels * 0.006) && width > mainWidth * 0.35 && height < mainHeight * 0.18 && component.bounds[3] >= main.bounds[3] - mainHeight * 0.12;
-      });
-      const warnings = [];
-      if (detachedGround) {
-        const message = `detached ground/shadow component remains: ${detachedGround.bounds.join(',')}`;
-        regressionFixture ? warnings.push(message) : addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
-      }
-      const flatGround = flatGroundEvidence(data, info.width, bounds);
-      if (flatGround) {
-        const message = `wide flat ground/shadow remains near y=${flatGround.y} (run ${(flatGround.runRatio * 100).toFixed(1)}%)`;
-        if (regressionFixture) warnings.push(message);
-        else if (flatGround.runRatio >= 0.8 && flatGround.colorDeviation < 18) addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
-        else addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE_REVIEW', message, 'medium', warnings, false);
-      }
-      const coloredGround = coloredGroundEvidence(data, info.width, info.height, bounds, main?.pixels ?? opaque);
-      if (coloredGround) {
-        const message = `wide saturated ground/background residue remains near the anchor (${coloredGround.colorBin})`;
-        regressionFixture ? warnings.push(message) : addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
-      }
-      records.push({ state: state.id, frame, ok: errors.length === 0, errors, diagnostics, warnings, sha256: createHash('sha256').update(data).digest('hex'), fileSha256: createHash('sha256').update(fileBytes).digest('hex'), transparentRatio: transparent / (info.width * info.height), bounds, componentCount: components.length, flatGround, coloredGround });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      records.push({
-        state: state.id,
-        frame,
-        ok: false,
-        errors: [`[ASSET_READ_FAILED] ${message}`],
-        diagnostics: [{ code: 'ASSET_READ_FAILED', message, repair: REPAIRS.ASSET_READ_FAILED, confidence: 'high', blocking: true }],
-        warnings: [],
-      });
+      return targets;
     }
   }
+  const spec = JSON.parse(await readFile(path.join(root, 'pet-spec.json'), 'utf8'));
+  targets.push({ petId: '', spec, assetDir: path.resolve(root, argumentsMap.assets ?? path.join('src', 'assets', 'pet')) });
+  return targets;
 }
 
-for (const state of states) {
-  const stateRecords = records.filter((record) => record.state === state.id && record.bounds);
-  const widths = stateRecords.map((record) => record.bounds[2] - record.bounds[0] + 1);
-  const heights = stateRecords.map((record) => record.bounds[3] - record.bounds[1] + 1);
-  const equivalentScales = widths.map((width, index) => Math.sqrt(width * heights[index]));
-  const centers = stateRecords.map((record) => (record.bounds[0] + record.bounds[2]) / 2 / 511);
-  const bottoms = stateRecords.map((record) => record.bounds[3] / 511);
-  const lockedBody = state.id === 'idle' || state.triggers.includes('ambient:blink');
-  const maximumScaleRatio = lockedBody ? 1.025 : 1.08;
-  const maximumCenterDrift = lockedBody ? 0.015 : 0.035;
-  const maximumBottomDrift = lockedBody ? 0.01 : 0.018;
-  const scaleDrifts = lockedBody
-    ? Math.max(...heights) / Math.min(...heights) > maximumScaleRatio
-    : Math.max(...equivalentScales) / Math.min(...equivalentScales) > maximumScaleRatio;
-  if (widths.length > 1 && scaleDrifts) {
-    const message = `visible subject scale drifts too much within ${state.id} (limit ${((maximumScaleRatio - 1) * 100).toFixed(1)}%)`;
-    for (const record of stateRecords) {
-      if (regressionFixture) record.warnings.push(message);
-      else addDiagnostic(record.errors, record.diagnostics, 'SCALE_DRIFT', message);
+const targets = await resolveTargets();
+const assetDirByPet = new Map(targets.map((target) => [target.petId, target.assetDir]));
+
+for (const target of targets) {
+  const { petId, spec, assetDir } = target;
+  const targetOccupancy = Number(spec.assetPipeline?.targetOccupancy ?? 0.78);
+  const runtimeStates = selectedStateId ? spec.states.filter((state) => state.id === selectedStateId) : spec.states;
+  if (selectedStateId && runtimeStates.length !== 1) throw new Error(`Unknown asset state: ${selectedStateId}`);
+  const coreIsRuntimeFrame = spec.states.some((state) => state.frames.includes(spec.character.coreAsset));
+  const states = !selectedStateId && !coreIsRuntimeFrame
+    ? [{ id: 'core-ip', frames: [spec.character.coreAsset], triggers: [], anchor: { x: 0.5, y: 0.95 } }, ...runtimeStates]
+    : runtimeStates;
+
+  for (const state of states) {
+    for (const frame of state.frames) {
+      const errors = [];
+      const diagnostics = [];
+      const file = path.join(assetDir, frame);
+      try {
+        const fileBytes = await readFile(file);
+        const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        if (info.width !== 512 || info.height !== 512 || info.channels !== 4) addDiagnostic(errors, diagnostics, 'INVALID_DIMENSIONS', 'must be 512x512 RGBA');
+        let transparent = 0;
+        let opaque = 0;
+        let minX = info.width;
+        let minY = info.height;
+        let maxX = -1;
+        let maxY = -1;
+        let borderPixels = 0;
+        for (let y = 0; y < info.height; y += 1) for (let x = 0; x < info.width; x += 1) {
+          const alpha = data[(y * info.width + x) * 4 + 3];
+          if (alpha === 0) transparent += 1;
+          if (alpha >= 16) {
+            opaque += 1; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+            if (x === 0 || y === 0 || x === info.width - 1 || y === info.height - 1) borderPixels += 1;
+          }
+        }
+        if (transparent === 0) addDiagnostic(errors, diagnostics, 'NO_TRANSPARENCY', 'no transparent pixels');
+        if (opaque === 0) addDiagnostic(errors, diagnostics, 'EMPTY_FOREGROUND', 'no visible foreground');
+        if (borderPixels > 0) addDiagnostic(errors, diagnostics, 'SUBJECT_TOUCHES_BORDER', `foreground touches canvas border (${borderPixels} pixels)`);
+        if (opaque > 0) {
+          const centerX = ((minX + maxX) / 2) / 511;
+          const bottomY = maxY / 511;
+          if (Math.abs(centerX - state.anchor.x) > 0.04) addDiagnostic(errors, diagnostics, 'ANCHOR_DRIFT', `horizontal anchor drift: ${centerX.toFixed(3)}`);
+          if (Math.abs(bottomY - state.anchor.y) > 0.02) addDiagnostic(errors, diagnostics, 'ANCHOR_DRIFT', `bottom anchor drift: ${bottomY.toFixed(3)}`);
+          const occupancy = Math.max(maxX - minX + 1, maxY - minY + 1) / 512;
+          if (occupancy > targetOccupancy + 0.025) addDiagnostic(errors, diagnostics, 'OCCUPANCY_TOO_LARGE', `visible subject exceeds target occupancy: ${occupancy.toFixed(3)}`);
+          const boundsArea = (maxX - minX + 1) * (maxY - minY + 1);
+          const rectangularFill = opaque / Math.max(1, boundsArea);
+          if (rectangularFill > 0.94 && boundsArea > info.width * info.height * 0.04) {
+            addDiagnostic(errors, diagnostics, 'SOLID_BLOCK', `foreground bounding box is ${(rectangularFill * 100).toFixed(1)}% opaque`);
+          }
+        }
+        const bounds = opaque ? [minX, minY, maxX, maxY] : null;
+        const components = componentsOf(data, info.width, info.height);
+        const main = components[0];
+        const detachedGround = main && components.slice(1).find((component) => {
+          const width = component.bounds[2] - component.bounds[0] + 1;
+          const height = component.bounds[3] - component.bounds[1] + 1;
+          const mainWidth = main.bounds[2] - main.bounds[0] + 1;
+          const mainHeight = main.bounds[3] - main.bounds[1] + 1;
+          return component.pixels >= Math.max(96, main.pixels * 0.006) && width > mainWidth * 0.35 && height < mainHeight * 0.18 && component.bounds[3] >= main.bounds[3] - mainHeight * 0.12;
+        });
+        const warnings = [];
+        if (detachedGround) {
+          const message = `detached ground/shadow component remains: ${detachedGround.bounds.join(',')}`;
+          regressionFixture ? warnings.push(message) : addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
+        }
+        const flatGround = flatGroundEvidence(data, info.width, bounds);
+        if (flatGround) {
+          const message = `wide flat ground/shadow remains near y=${flatGround.y} (run ${(flatGround.runRatio * 100).toFixed(1)}%)`;
+          if (regressionFixture) warnings.push(message);
+          else if (flatGround.runRatio >= 0.8 && flatGround.colorDeviation < 18) addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
+          else addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE_REVIEW', message, 'medium', warnings, false);
+        }
+        const coloredGround = coloredGroundEvidence(data, info.width, info.height, bounds, main?.pixels ?? opaque);
+        if (coloredGround) {
+          const message = `wide saturated ground/background residue remains near the anchor (${coloredGround.colorBin})`;
+          regressionFixture ? warnings.push(message) : addDiagnostic(errors, diagnostics, 'GROUND_RESIDUE', message);
+        }
+        records.push({ petId, state: state.id, frame, ok: errors.length === 0, errors, diagnostics, warnings, sha256: createHash('sha256').update(data).digest('hex'), fileSha256: createHash('sha256').update(fileBytes).digest('hex'), transparentRatio: transparent / (info.width * info.height), bounds, componentCount: components.length, flatGround, coloredGround });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        records.push({
+          petId,
+          state: state.id,
+          frame,
+          ok: false,
+          errors: [`[ASSET_READ_FAILED] ${message}`],
+          diagnostics: [{ code: 'ASSET_READ_FAILED', message, repair: REPAIRS.ASSET_READ_FAILED, confidence: 'high', blocking: true }],
+          warnings: [],
+        });
+      }
     }
   }
-  if (centers.length > 1 && Math.max(...centers) - Math.min(...centers) > maximumCenterDrift) {
-    const message = `horizontal center drifts too much within ${state.id}`;
-    for (const record of stateRecords) {
-      if (regressionFixture) record.warnings.push(message);
-      else addDiagnostic(record.errors, record.diagnostics, 'ANCHOR_DRIFT', message);
+
+  for (const state of states) {
+    const stateRecords = records.filter((record) => record.petId === petId && record.state === state.id && record.bounds);
+    const widths = stateRecords.map((record) => record.bounds[2] - record.bounds[0] + 1);
+    const heights = stateRecords.map((record) => record.bounds[3] - record.bounds[1] + 1);
+    const equivalentScales = widths.map((width, index) => Math.sqrt(width * heights[index]));
+    const centers = stateRecords.map((record) => (record.bounds[0] + record.bounds[2]) / 2 / 511);
+    const bottoms = stateRecords.map((record) => record.bounds[3] / 511);
+    const lockedBody = state.id === 'idle' || state.triggers.includes('ambient:blink');
+    const maximumScaleRatio = lockedBody ? 1.025 : 1.08;
+    const maximumCenterDrift = lockedBody ? 0.015 : 0.035;
+    const maximumBottomDrift = lockedBody ? 0.01 : 0.018;
+    const scaleDrifts = lockedBody
+      ? Math.max(...heights) / Math.min(...heights) > maximumScaleRatio
+      : Math.max(...equivalentScales) / Math.min(...equivalentScales) > maximumScaleRatio;
+    if (widths.length > 1 && scaleDrifts) {
+      const message = `visible subject scale drifts too much within ${state.id} (limit ${((maximumScaleRatio - 1) * 100).toFixed(1)}%)`;
+      for (const record of stateRecords) {
+        if (regressionFixture) record.warnings.push(message);
+        else addDiagnostic(record.errors, record.diagnostics, 'SCALE_DRIFT', message);
+      }
     }
-  }
-  if (bottoms.length > 1 && Math.max(...bottoms) - Math.min(...bottoms) > maximumBottomDrift) {
-    const message = `bottom anchor drifts too much within ${state.id}`;
-    for (const record of stateRecords) {
-      if (regressionFixture) record.warnings.push(message);
-      else addDiagnostic(record.errors, record.diagnostics, 'ANCHOR_DRIFT', message);
+    if (centers.length > 1 && Math.max(...centers) - Math.min(...centers) > maximumCenterDrift) {
+      const message = `horizontal center drifts too much within ${state.id}`;
+      for (const record of stateRecords) {
+        if (regressionFixture) record.warnings.push(message);
+        else addDiagnostic(record.errors, record.diagnostics, 'ANCHOR_DRIFT', message);
+      }
     }
-  }
-  const seen = new Map();
-  for (let index = 0; index < stateRecords.length; index += 1) {
-    const record = stateRecords[index];
-    const previous = seen.get(record.sha256);
-    const allowedBlinkClosure = state.id === 'blink' && previous === 0 && index === stateRecords.length - 1 && stateRecords.length >= 3;
-    if (previous !== undefined && !allowedBlinkClosure) {
-      const message = `duplicate pixels do not create a real animation frame: ${record.frame}`;
-      if (regressionFixture) record.warnings.push(message);
-      else addDiagnostic(record.errors, record.diagnostics, 'DUPLICATE_FRAME', message);
+    if (bottoms.length > 1 && Math.max(...bottoms) - Math.min(...bottoms) > maximumBottomDrift) {
+      const message = `bottom anchor drifts too much within ${state.id}`;
+      for (const record of stateRecords) {
+        if (regressionFixture) record.warnings.push(message);
+        else addDiagnostic(record.errors, record.diagnostics, 'ANCHOR_DRIFT', message);
+      }
     }
-    seen.set(record.sha256, index);
+    const seen = new Map();
+    for (let index = 0; index < stateRecords.length; index += 1) {
+      const record = stateRecords[index];
+      const previous = seen.get(record.sha256);
+      const allowedBlinkClosure = state.id === 'blink' && previous === 0 && index === stateRecords.length - 1 && stateRecords.length >= 3;
+      if (previous !== undefined && !allowedBlinkClosure) {
+        const message = `duplicate pixels do not create a real animation frame: ${record.frame}`;
+        if (regressionFixture) record.warnings.push(message);
+        else addDiagnostic(record.errors, record.diagnostics, 'DUPLICATE_FRAME', message);
+      }
+      seen.set(record.sha256, index);
+    }
+    for (const record of stateRecords) record.ok = record.errors.length === 0;
   }
-  for (const record of stateRecords) record.ok = record.errors.length === 0;
 }
 
 const tiles = [];
@@ -277,11 +305,12 @@ for (let index = 0; index < records.length; index += 1) {
   const record = records[index];
   if (!record || !record.frame) continue;
   try {
-    const thumb = await sharp(path.join(assetDir, record.frame)).resize(190, 190, { fit: 'contain' }).png().toBuffer();
+    const thumb = await sharp(path.join(assetDirByPet.get(record.petId) ?? '', record.frame)).resize(190, 190, { fit: 'contain' }).png().toBuffer();
     const size = record.bounds ? `${record.bounds[2] - record.bounds[0] + 1}×${record.bounds[3] - record.bounds[1] + 1}` : 'missing';
     const code = record.diagnostics?.[0]?.code;
-    const labelText = `${record.state} · ${record.frame} · ${size}${code ? ` · ${code}` : ''}`.replaceAll('&','&amp;').replaceAll('<','&lt;');
-    const label = Buffer.from(`<svg width="220" height="40" xmlns="http://www.w3.org/2000/svg"><rect width="220" height="40" fill="${code ? '#fff0f0' : '#fff'}"/><text x="110" y="25" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="${code ? '#a21b1b' : '#20242c'}">${labelText}</text></svg>`);
+    const petTag = record.petId ? `${record.petId} · ` : '';
+    const labelText = `${petTag}${record.state} · ${record.frame} · ${size}${code ? ` · ${code}` : ''}`.replaceAll('&','&amp;').replaceAll('<','&lt;');
+    const label = Buffer.from(`<svg width="220" height="40" xmlns="http://www.w3.org/2000/svg"><rect width="220" height="40" fill="${code ? '#fff0f0' : '#fff'}"/><text x="110" y="25" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="${code ? '#a21b1b' : '#20242c'}">${labelText}</text></svg>`);
     tiles.push({ input: thumb, left: (index % columns) * tileWidth + 15, top: Math.floor(index / columns) * tileHeight + 10 });
     tiles.push({ input: label, left: (index % columns) * tileWidth, top: Math.floor(index / columns) * tileHeight + 205 });
   } catch { /* missing file is already in the JSON report */ }
@@ -292,6 +321,7 @@ await sharp({ create: { width: columns * tileWidth, height: rows * tileHeight, c
 const report = {
   generatedAt: new Date().toISOString(),
   scope: selectedStateId || 'all',
+  pets: targets.map((target) => target.petId),
   passed: records.every((item) => item.ok),
   regressionFixture,
   warningCount: records.reduce((total, item) => total + item.warnings.length, 0),

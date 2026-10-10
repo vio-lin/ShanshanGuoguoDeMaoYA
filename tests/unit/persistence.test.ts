@@ -13,6 +13,7 @@ const defaults: Settings = {
   typingReaction: false,
   clickThrough: false,
   petScale: 1,
+  currentPet: 'ragdoll',
 };
 
 test('atomic JSON persistence round-trips without temporary files', async () => {

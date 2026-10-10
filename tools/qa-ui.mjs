@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 
@@ -20,7 +20,7 @@ for (const view of ['dashboard', 'reminder', 'pet']) {
 add('dashboard-hidden-scrollbar', /scrollbar-width:\s*none/.test(files.dashboard) && /::-webkit-scrollbar\s*\{[^}]*width:\s*0[^}]*height:\s*0/s.test(files.dashboard), 'dashboard internal scrolling must not expose a system scrollbar');
 add('reminder-hidden-scrollbar', /scrollbar-width:\s*none/.test(files.reminder) && /::-webkit-scrollbar\s*\{[^}]*width:\s*0[^}]*height:\s*0/s.test(files.reminder), 'reminder internal scrolling must not expose a system scrollbar');
 add('native-control-reset', /appearance:\s*none/.test(files.dashboard) && /appearance:\s*none/.test(files.reminder), 'native form controls must reset OS appearance');
-add('png-tray-runtime', /path\.resolve\(__dirname,\s*trayIconPath\)/.test(files.main) && /nativeImage\.createFromPath/.test(files.main) && /\.isEmpty\(\)/.test(files.main) && !/createFromDataURL/.test(files.main), 'tray must resolve the bundled PNG beside the webpack main entry and reject an empty native image');
+add('png-tray-runtime', /require\.context\(\s*['"]\.\/pets['"]\s*,\s*true\s*,\s*\/tray-icon/.test(files.main) && /trayIconPathFor\(/.test(files.main) && /nativeImage\.createFromPath/.test(files.main) && /\.isEmpty\(\)/.test(files.main) && !/createFromDataURL/.test(files.main), 'tray must resolve the per-pet bundled PNG beside the webpack main entry and reject an empty native image');
 add('menu-emoji', ['⏰', '🏠', '🖱️', '🙈', '🐾', '🚪'].every((emoji) => files.main.includes(emoji)) && spec.experience.interactions.every((interaction) => typeof interaction.emoji === 'string' && interaction.emoji.length > 0), 'system and interaction menus need semantic emoji');
 
 const baseWindow = Number(spec.experience?.petSizing?.baseWindowPx);
@@ -31,15 +31,22 @@ const estimatedMinimumSubject = baseWindow * 0.65 * occupancy;
 add('default-pet-size', estimatedDefaultSubject >= 120 && estimatedDefaultSubject <= 175, `estimated visible subject ${estimatedDefaultSubject.toFixed(1)}px must be 120-175px`);
 add('minimum-pet-size', estimatedMinimumSubject <= 150, `estimated minimum visible subject ${estimatedMinimumSubject.toFixed(1)}px must be <=150px`);
 
-const trayPath = path.join(root, 'src', 'assets', 'tray', 'tray-icon.png');
-try {
-  const { data, info } = await sharp(trayPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  let visible = 0;
-  for (let index = 3; index < data.length; index += 4) if (data[index] >= 16) visible += 1;
-  const visibleRatio = visible / (info.width * info.height);
-  add('tray-icon-file', info.width === 32 && info.height === 32 && visibleRatio >= 0.08, `tray icon ${info.width}×${info.height}, visible ${(visibleRatio * 100).toFixed(1)}%`);
-} catch (error) {
-  add('tray-icon-file', false, error instanceof Error ? error.message : String(error));
+const petsRoot = path.join(root, 'src', 'pets');
+let petDirs = [];
+try { petDirs = (await readdir(petsRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory()); } catch { petDirs = []; }
+const trayPaths = petDirs.length
+  ? petDirs.map((dir) => path.join(petsRoot, dir.name, 'tray', 'tray-icon.png'))
+  : [path.join(root, 'src', 'assets', 'tray', 'tray-icon.png')];
+for (const trayPath of trayPaths) {
+  try {
+    const { data, info } = await sharp(trayPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let visible = 0;
+    for (let index = 3; index < data.length; index += 4) if (data[index] >= 16) visible += 1;
+    const visibleRatio = visible / (info.width * info.height);
+    add('tray-icon-file', info.width === 32 && info.height === 32 && visibleRatio >= 0.08, `tray icon ${path.relative(root, trayPath)} ${info.width}×${info.height}, visible ${(visibleRatio * 100).toFixed(1)}%`);
+  } catch (error) {
+    add('tray-icon-file', false, `${path.relative(root, trayPath)}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 await mkdir(qaDirectory, { recursive: true });

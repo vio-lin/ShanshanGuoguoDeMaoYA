@@ -5,15 +5,25 @@ import { createHash, randomUUID } from 'node:crypto';
 import specData from '../pet-spec.json';
 import type { InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 import { assertInteractionId, assertReminderInput, assertRuntimeFailureReport, assertRuntimeReadyReport, assertSettingsPatch, assertStringArray } from './shared/contracts';
+import { getPetProfile, PET_PROFILES } from './pet-profiles';
 import { draggedBounds, snapBounds, type Point, type Rect } from './main/drag';
 import { JsonLogger } from './main/logger';
 import { atomicWriteJson, uniqueDestination } from './main/persistence';
 import { TypingListener } from './main/typing-listener';
 import { localDateKey, nextReminderDelay, parsePersistedStats, parseReminders, parseSettings, type PersistedStats } from './main/data-validation';
 import { readValidatedJson } from './main/persistence';
-import trayIconPath from './assets/tray/tray-icon.png';
+// 托盘图标按宠物打包（src/pets/<id>/tray/tray-icon.png），运行时按当前宠物取。
+const trayIconContext = require.context('./pets', true, /tray-icon\.png$/i);
+const trayIconMap = new Map<string, string>();
+for (const key of trayIconContext.keys()) trayIconMap.set(key.replace(/^\.\//, ''), trayIconContext(key));
+function trayIconPathFor(petId: string): string {
+  const url = trayIconMap.get(`${petId}/tray/tray-icon.png`);
+  if (!url) throw new Error(`Missing tray icon for pet: ${petId}`);
+  return path.resolve(__dirname, url);
+}
 
-const spec = specData as PetSpec;
+const defaultSpec = specData as PetSpec;
+let spec: PetSpec = defaultSpec;
 type Role = 'pet' | 'reminder' | 'dashboard';
 let petWindow: BrowserWindow | undefined;
 let reminderWindow: BrowserWindow | undefined;
@@ -36,7 +46,7 @@ let quitPersisting = false;
 const roles = new Map<number, Role>();
 const reminderTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const typingListener = new TypingListener();
-const expectedRuntimeAssets = new Set([spec.character.coreAsset, ...spec.states.flatMap((state) => state.frames)]);
+let expectedRuntimeAssets = new Set([defaultSpec.character.coreAsset, ...defaultSpec.states.flatMap((state) => state.frames)]);
 const runtimeReadyFile = path.join(process.cwd(), '.build', 'runtime-ready.json');
 const runtimeFailureFile = path.join(process.cwd(), '.build', 'runtime-failed.json');
 const runtimeEvidenceEnabled = !app.isPackaged || process.env.PET_PREVIEW_MODE === '1';
@@ -49,7 +59,8 @@ const defaultSettings: Settings = {
   alwaysOnTop: true,
   typingReaction: spec.features.typingReaction,
   clickThrough: false,
-  petScale: spec.experience.petSizing.defaultScale,
+  petScale: defaultSpec.experience.petSizing.defaultScale,
+  currentPet: PET_PROFILES[0]?.id ?? 'ragdoll',
 };
 
 const defaultStats: PersistedStats = {
@@ -519,6 +530,7 @@ function buildPetMenu(): Electron.MenuItemConstructorOptions[] {
   }
   if (spec.features.reminders) items.push({ label: '⏰ 添加提醒', click: showReminderComposer });
   if (spec.features.dashboard) items.push({ label: `🏠 ${spec.character.displayName}的小屋`, click: showDashboard });
+  if (PET_PROFILES.length > 1) items.push(petSwitchSubmenu());
   if (spec.features.filePocket) items.push({ label: '📁 打开文件口袋', click: () => void openPocket() });
   items.push({ type: 'separator' });
   items.push({ label: settings.clickThrough ? '🖱️ 关闭鼠标穿透' : '🖱️ 开启鼠标穿透', click: () => void saveSettings({ ...settings, clickThrough: !settings.clickThrough }) });
@@ -529,7 +541,7 @@ function buildPetMenu(): Electron.MenuItemConstructorOptions[] {
 
 function createTray(): void {
   if (!spec.features.tray) return;
-  const resolvedTrayIconPath = path.resolve(__dirname, trayIconPath);
+  const resolvedTrayIconPath = trayIconPathFor(settings.currentPet);
   const trayImage = nativeImage.createFromPath(resolvedTrayIconPath);
   if (trayImage.isEmpty()) throw new Error(`Tray icon is empty: ${resolvedTrayIconPath}`);
   tray = new Tray(trayImage.resize({ width: 32, height: 32, quality: 'best' }));
@@ -537,12 +549,42 @@ function createTray(): void {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `🐾 显示${spec.character.displayName}`, click: () => petWindow?.show() },
     { label: `🏠 ${spec.character.displayName}的小屋`, click: showDashboard },
+    petSwitchSubmenu(),
     { label: settings.clickThrough ? '🖱️ 关闭鼠标穿透' : '🖱️ 开启鼠标穿透', click: () => void saveSettings({ ...settings, clickThrough: !settings.clickThrough }) },
     { label: '🔄 检查更新', click: () => void promptCheckUpdate() },
     { type: 'separator' },
     { label: '🚪 退出', click: () => { isQuitting = true; app.quit(); } },
   ]));
   tray.on('click', () => petWindow?.isVisible() ? petWindow.hide() : petWindow?.show());
+}
+
+async function activatePet(petId: string): Promise<boolean> {
+  if (petId === settings.currentPet) return true;
+  const profile = getPetProfile(petId);
+  if (!profile) return false;
+  spec = profile.spec;
+  settings.currentPet = petId;
+  await atomicWriteJson(userFile('settings.json'), settings);
+  expectedRuntimeAssets = new Set([spec.character.coreAsset, ...spec.states.flatMap((state) => state.frames)]);
+  for (const window of [petWindow, reminderWindow, dashboardWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send('pet:changed', petId);
+  }
+  applyPetSettings();
+  createTrayMenuRefresh();
+  broadcastStats();
+  return true;
+}
+
+function petSwitchSubmenu(): { label: string; submenu: Array<{ label: string; type: 'checkbox'; checked: boolean; click: () => void }> } {
+  return {
+    label: '🐾 切换宠物',
+    submenu: PET_PROFILES.map((profile) => ({
+      label: `${profile.displayName}${profile.id === settings.currentPet ? ' ✓' : ''}`,
+      type: 'checkbox' as const,
+      checked: profile.id === settings.currentPet,
+      click: () => void activatePet(profile.id),
+    })),
+  };
 }
 
 async function saveSettings(next: Settings): Promise<Settings> {
@@ -556,9 +598,12 @@ async function saveSettings(next: Settings): Promise<Settings> {
 
 function createTrayMenuRefresh(): void {
   if (!tray) return;
+  tray.setImage(nativeImage.createFromPath(trayIconPathFor(settings.currentPet)).resize({ width: 32, height: 32, quality: 'best' }));
+  tray.setToolTip(spec.app.name);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `🐾 显示${spec.character.displayName}`, click: () => petWindow?.show() },
     { label: `🏠 ${spec.character.displayName}的小屋`, click: showDashboard },
+    petSwitchSubmenu(),
     { label: settings.clickThrough ? '🖱️ 关闭鼠标穿透' : '🖱️ 开启鼠标穿透', click: () => void saveSettings({ ...settings, clickThrough: !settings.clickThrough }) },
     { type: 'separator' },
     { label: '🚪 退出', click: () => { isQuitting = true; app.quit(); } },
@@ -755,6 +800,12 @@ function registerIpc(): void {
   });
   ipcMain.handle('window:show-reminder', (event) => { assertSender(event, ['pet', 'dashboard']); showReminderComposer(); });
   ipcMain.handle('window:show-dashboard', (event) => { assertSender(event, ['pet']); showDashboard(); });
+  ipcMain.handle('pets:list', (event) => { assertSender(event, ['pet', 'dashboard', 'reminder']); return PET_PROFILES.map((profile) => ({ id: profile.id, displayName: profile.displayName })); });
+  ipcMain.handle('pets:activate', async (event, petId: unknown) => {
+    assertSender(event, ['pet', 'dashboard']);
+    if (typeof petId !== 'string' || petId.length > 64) throw new TypeError('Invalid pet id');
+    return activatePet(petId);
+  });
   ipcMain.handle('window:hide-reminder', (event) => { assertSender(event, ['reminder']); reminderWindow?.hide(); });
   ipcMain.handle('window:hide-dashboard', (event) => { assertSender(event, ['dashboard']); dashboardWindow?.hide(); });
   ipcMain.handle('window:hide-pet', (event) => { assertSender(event, ['pet', 'dashboard']); petWindow?.hide(); });
@@ -779,6 +830,14 @@ async function initialize(): Promise<void> {
   await verifySourceAssetGate();
   logger = new JsonLogger(userFile('logs/app.jsonl'));
   settings = await readValidatedJson(userFile('settings.json'), defaultSettings, parseSettings);
+  const activeProfile = getPetProfile(settings.currentPet);
+  if (!activeProfile) {
+    settings.currentPet = PET_PROFILES[0]?.id ?? 'ragdoll';
+    spec = defaultSpec;
+  } else {
+    spec = activeProfile.spec;
+  }
+  expectedRuntimeAssets = new Set([spec.character.coreAsset, ...spec.states.flatMap((state) => state.frames)]);
   reminders = await readValidatedJson(userFile('reminders.json'), [] as Reminder[], parseReminders);
   stats = await readValidatedJson(userFile('pet-stats.json'), defaultStats, parsePersistedStats);
   normalizeStatsDay();
