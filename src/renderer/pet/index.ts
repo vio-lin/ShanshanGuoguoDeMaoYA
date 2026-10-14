@@ -1,4 +1,4 @@
-import type { PetSpec, StateActivity } from '../../shared/contracts';
+import type { Anniversary, AnniversaryStatus, PetSpec, StateActivity } from '../../shared/contracts';
 import { exceedsDragThreshold } from '../../main/drag';
 import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import { PetStateMachine } from './state-machine';
@@ -17,6 +17,11 @@ const assetContext = require.context('../../pets', true, /\.png$/i);
 for (const key of assetContext.keys()) {
   assetMap.set(key.replace(/^\.\//, ''), assetContext(key));
 }
+// 纪念日素材（所有宠物共用）
+const anniversaryContext = require.context('../../anniversaries', true, /\.png$/i);
+for (const key of anniversaryContext.keys()) {
+  assetMap.set(`anniversaries/${key.replace(/^\.\//, '')}`, anniversaryContext(key));
+}
 
 let petSpec: PetSpec = PET_PROFILES[0]!.spec;
 let petId: string = PET_PROFILES[0]!.id;
@@ -30,8 +35,33 @@ let moveStart = 0;
 let moveDuration = 0;
 let moveState: string | null = null;
 
+// 当前命中的纪念日（待机帧替换源）
+let activeAnniversary: Anniversary | null = null;
+
 function frameUrl(frame: string): string | undefined {
   return assetMap.get(`${petId}/assets/${frame}`);
+}
+
+// 纪念日待机帧 URL：anniversaries/assets/<id>/<frame>
+function anniversaryFrameUrl(frame: string): string | undefined {
+  if (!activeAnniversary) return undefined;
+  return assetMap.get(`anniversaries/assets/${activeAnniversary.id}/${frame}`);
+}
+
+// 当前实际用于 idle 的帧：纪念日命中时替换
+function currentIdleFrames(): string[] {
+  if (activeAnniversary && activeAnniversary.frames.length > 0) {
+    return activeAnniversary.frames;
+  }
+  return petSpec.states.find((state) => state.id === 'idle')?.frames ?? [];
+}
+
+// 根据状态解析实际图片 URL（idle 命中纪念日时切换素材源）
+function resolveFrame(stateId: string, frame: string): string | undefined {
+  if (stateId === 'idle' && activeAnniversary && activeAnniversary.frames.length > 0) {
+    return anniversaryFrameUrl(frame);
+  }
+  return frameUrl(frame);
 }
 
 // 呼吸/回弹 CSS 变量按当前宠物 spec 设置
@@ -74,7 +104,12 @@ function setState(stateId: string, durationMs?: number): void {
   if (!stateMachine.start(stateId, performance.now(), durationMs)) return;
   const snapshot = stateMachine.tick(performance.now());
   container.dataset.state = snapshot.stateId;
-  const url = frameUrl(snapshot.frame);
+  let url: string | undefined;
+  if (useAnniversaryFrames(snapshot.stateId)) {
+    url = anniversaryFrameByIndex(snapshot.frameIndex);
+  } else {
+    url = resolveFrame(snapshot.stateId, snapshot.frame);
+  }
   if (url) sprite.src = url;
   // 记录移动状态开始时间
   if (stateId === 'walk' || stateId === 'stalk') {
@@ -86,12 +121,32 @@ function setState(stateId: string, durationMs?: number): void {
   }
 }
 
+// 纪念日命中时，哪些状态用节日待机帧（移动类状态用正常素材）
+function useAnniversaryFrames(stateId: string): boolean {
+  if (!activeAnniversary || activeAnniversary.frames.length === 0) return false;
+  // 移动类状态不替换，用正常素材
+  const movementStates = ['walk', 'stalk', 'jump'];
+  return !movementStates.includes(stateId);
+}
+
+// 取节日帧 URL
+function anniversaryFrameByIndex(frameIndex: number): string | undefined {
+  if (!activeAnniversary) return undefined;
+  const frameName = activeAnniversary.frames[frameIndex % activeAnniversary.frames.length];
+  return assetMap.get(`anniversaries/assets/${activeAnniversary.id}/${frameName}`);
+}
+
 // 动画循环
 function animate(timestamp: number): void {
   const snapshot = stateMachine.tick(timestamp);
   container.dataset.state = snapshot.stateId;
   if (snapshot.stateChanged) {
-    const url = frameUrl(snapshot.frame);
+    let url: string | undefined;
+    if (useAnniversaryFrames(snapshot.stateId)) {
+      url = anniversaryFrameByIndex(snapshot.frameIndex);
+    } else {
+      url = resolveFrame(snapshot.stateId, snapshot.frame);
+    }
     if (url) sprite.src = url;
   }
 
@@ -246,7 +301,7 @@ function switchPet(nextPetId: string): void {
   container.dataset.state = stateMachine.currentStateId();
   const firstFrame = petSpec.states.find((state) => state.id === 'idle')?.frames[0];
   if (firstFrame) {
-    const url = frameUrl(firstFrame);
+    const url = resolveFrame('idle', firstFrame);
     if (url) sprite.src = url;
   }
   moveState = null;
@@ -254,9 +309,31 @@ function switchPet(nextPetId: string): void {
   playSquash();
 }
 
+// 纪念日命中变化：替换待机帧源并立刻刷新当前帧
+function applyAnniversary(status: AnniversaryStatus): void {
+  const next = status.list.find((item) => item.id === status.activeId) ?? null;
+  const changed = (next?.id ?? null) !== (activeAnniversary?.id ?? null);
+  activeAnniversary = next;
+  if (!changed) return;
+  // 立即刷新待机画面
+  if (stateMachine.currentStateId() === 'idle') {
+    const frames = currentIdleFrames();
+    const first = frames[0];
+    if (first) {
+      const url = resolveFrame('idle', first);
+      if (url) sprite.src = url;
+    }
+  }
+  if (next?.description) showFeedback(next.description);
+}
+
 // 初始化
 async function init(): Promise<void> {
   try {
+    // 先取纪念日状态（命中则待机帧源切换）
+    const anniversaryStatus = await window.petAPI?.anniversaries.status();
+    if (anniversaryStatus) applyAnniversary(anniversaryStatus);
+
     const settings = await window.petAPI?.settings.get();
     const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
     if (profile && profile.id !== petId) {
@@ -314,6 +391,11 @@ async function init(): Promise<void> {
 // 监听宠物切换
 window.petAPI?.events.onPetChanged((nextPetId) => {
   switchPet(nextPetId);
+});
+
+// 监听纪念日命中变化
+window.petAPI?.events.onAnniversaryChanged((status) => {
+  applyAnniversary(status);
 });
 
 init();

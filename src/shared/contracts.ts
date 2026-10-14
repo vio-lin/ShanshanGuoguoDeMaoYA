@@ -178,6 +178,25 @@ export interface UpdateInfo {
   notes: string;
 }
 
+export interface Anniversary {
+  id: string;
+  /** 每年重复日期，格式 MM-DD */
+  date: string;
+  title: string;
+  description: string;
+  /** 待机帧序列（相对 src/anniversaries/assets/<id>/） */
+  frames: string[];
+  frameDurationMs: number;
+}
+
+export interface AnniversaryStatus {
+  list: Anniversary[];
+  /** 当前命中的纪念日 id（null = 今天无命中） */
+  activeId: string | null;
+  /** 是否为模拟状态（测试用） */
+  simulated: boolean;
+}
+
 export interface PetAPI {
   settings: {
     get: () => Promise<Settings>;
@@ -224,10 +243,16 @@ export interface PetAPI {
     onStats: (listener: (stats: PetStats) => void) => () => void;
     onTypingStatus: (listener: (status: TypingStatus) => void) => () => void;
     onPetChanged: (listener: (petId: string) => void) => () => void;
+    onAnniversaryChanged: (listener: (status: AnniversaryStatus) => void) => () => void;
   };
   pets: {
     list: () => Promise<PetSummary[]>;
     activate: (petId: string) => Promise<boolean>;
+  };
+  anniversaries: {
+    status: () => Promise<AnniversaryStatus>;
+    /** 模拟今天命中某纪念日；传 null 取消模拟 */
+    simulate: (date: string | null) => Promise<AnniversaryStatus>;
   };
 }
 
