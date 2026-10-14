@@ -1,4 +1,4 @@
-import type { PetSpec, PetStats, Settings, InteractionSpec, UpdateInfo } from '../../shared/contracts';
+import type { Anniversary, AnniversaryStatus, PetSpec, PetStats, Settings, InteractionSpec, UpdateInfo } from '../../shared/contracts';
 import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import './index.css';
 
@@ -235,8 +235,145 @@ async function loadUpdateInfo(): Promise<void> {
   });
 }
 
+// 纪念日测试区
+async function loadAnniversaries(): Promise<void> {
+  const listEl = document.getElementById('anniversary-list') as HTMLDivElement | null;
+  const statusEl = document.getElementById('anniversary-status') as HTMLDivElement | null;
+  if (!listEl || !statusEl) return;
+  const listBox: HTMLDivElement = listEl;
+  const statusBox: HTMLDivElement = statusEl;
+
+  function render(status: AnniversaryStatus): void {
+    listBox.replaceChildren();
+    if (status.list.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'setting-desc';
+      empty.textContent = '（暂无纪念日，在 src/anniversaries/index.json 添加后重启应用）';
+      listBox.appendChild(empty);
+    } else {
+      for (const item of status.list) {
+        const row = document.createElement('div');
+        row.className = 'setting-item';
+        const isActive = item.id === status.activeId;
+        row.style.opacity = isActive ? '1' : '0.75';
+
+        const labelBox = document.createElement('div');
+        const label = document.createElement('div');
+        label.className = 'setting-label';
+        label.textContent = `${item.date}  ${item.title}${isActive ? '  ✓' : ''}`;
+        const desc = document.createElement('div');
+        desc.className = 'setting-desc';
+        desc.textContent = item.description;
+        labelBox.append(label, desc);
+
+        const btn = document.createElement('button');
+        btn.className = 'update-btn';
+        btn.style.padding = '6px 12px';
+        btn.style.fontSize = '12px';
+        btn.textContent = isActive ? '恢复正常' : '预览';
+        btn.addEventListener('click', async () => {
+          try {
+            const next = isActive ? null : item.date;
+            const result = await window.petAPI?.anniversaries.simulate(next);
+            if (result) render(result);
+          } catch (error) {
+            console.error('Failed to simulate anniversary:', error);
+          }
+        });
+        row.append(labelBox, btn);
+        listBox.appendChild(row);
+      }
+    }
+
+    if (status.activeId) {
+      const active = status.list.find((item) => item.id === status.activeId);
+      statusBox.textContent = status.simulated
+        ? `当前为模拟状态：${active?.title ?? ''}（点"恢复正常"回到今天）`
+        : `今天命中：${active?.title ?? ''}`;
+    } else {
+      statusBox.textContent = status.simulated ? '当前为模拟状态：无命中（恢复中）' : '今天无纪念日';
+    }
+  }
+
+  try {
+    const status = await window.petAPI?.anniversaries.status();
+    if (status) render(status);
+  } catch (error) {
+    console.error('Failed to load anniversaries:', error);
+  }
+
+  window.petAPI?.events.onAnniversaryChanged((status) => render(status));
+}
+
+// Tab 切换
+function setupTabs(): void {
+  const btns = document.querySelectorAll('.tab-btn');
+  const pages = document.querySelectorAll('.tab-page');
+  btns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = (btn as HTMLElement).dataset.tab;
+      btns.forEach((b) => b.classList.remove('active'));
+      pages.forEach((p) => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${tab}`)?.classList.add('active');
+    });
+  });
+}
+
+// 版本更新日志
+const CHANGELOG = [
+  {
+    version: '1.2.0',
+    date: '2026-10',
+    changes: ['🎉 新增节日待机：妮妮生日（戴生日帽+蛋糕）', '🎂 节日系统：按日期自动切换特殊待机帧', '🔧 小屋面板改为 tab 布局（主页/节日/更新日志）'],
+  },
+  {
+    version: '1.1.0',
+    date: '2026-09',
+    changes: ['🐱 新增第二只宠物妮妮，支持切换', '📦 支持自动更新检查', '🎨 优化动作帧和待机节奏'],
+  },
+  {
+    version: '1.0.0',
+    date: '2026-09',
+    changes: ['🐱 首发布：哈哈（布偶猫）桌宠', '🚶 走路、跳跃、匍匐、埋屎等动作', '💬 右键互动、提醒、小屋面板'],
+  },
+];
+
+function renderChangelog(): void {
+  const listEl = document.getElementById('changelog-list');
+  if (!listEl) return;
+  listEl.replaceChildren();
+  for (const item of CHANGELOG) {
+    const row = document.createElement('div');
+    row.className = 'changelog-item';
+    const verRow = document.createElement('div');
+    verRow.className = 'ver-row';
+    const ver = document.createElement('span');
+    ver.className = 'ver';
+    ver.textContent = `v${item.version}`;
+    const date = document.createElement('span');
+    date.className = 'date';
+    date.textContent = item.date;
+    verRow.append(ver, date);
+    const changes = document.createElement('div');
+    changes.className = 'changes';
+    const ul = document.createElement('ul');
+    for (const c of item.changes) {
+      const li = document.createElement('li');
+      li.textContent = c;
+      ul.appendChild(li);
+    }
+    changes.appendChild(ul);
+    row.append(verRow, changes);
+    row.addEventListener('click', () => row.classList.toggle('expanded'));
+    listEl.appendChild(row);
+  }
+}
+
 // 初始化
 async function init(): Promise<void> {
+  setupTabs();
+  renderChangelog();
   const settings = await window.petAPI?.settings.get();
   const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
   if (profile) {
@@ -247,6 +384,7 @@ async function init(): Promise<void> {
   await loadSettings();
   await loadStats();
   await loadUpdateInfo();
+  await loadAnniversaries();
 }
 
 // 监听宠物切换

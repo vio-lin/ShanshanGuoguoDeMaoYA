@@ -3,7 +3,8 @@ import { copyFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import specData from '../pet-spec.json';
-import type { InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
+import anniversaryList from './anniversaries/index.json';
+import type { Anniversary, AnniversaryStatus, InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 import { assertInteractionId, assertReminderInput, assertRuntimeFailureReport, assertRuntimeReadyReport, assertSettingsPatch, assertStringArray } from './shared/contracts';
 import { getPetProfile, PET_PROFILES } from './pet-profiles';
 import { draggedBounds, snapBounds, type Point, type Rect } from './main/drag';
@@ -20,6 +21,38 @@ function trayIconPathFor(petId: string): string {
   const url = trayIconMap.get(`${petId}/tray/tray-icon.png`);
   if (!url) throw new Error(`Missing tray icon for pet: ${petId}`);
   return path.resolve(__dirname, url);
+}
+
+// --- 纪念日配置（所有宠物共用一套特殊待机素材） ---
+const anniversaries = anniversaryList as Anniversary[];
+/** 模拟日期 MM-DD（测试用）；null 表示按真实今天匹配 */
+let simulatedAnniversaryDate: string | null = null;
+
+function todayMmDd(now = new Date()): string {
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${mm}-${dd}`;
+}
+
+function matchAnniversary(mmDd: string | null): Anniversary | null {
+  if (!mmDd) return null;
+  return anniversaries.find((item) => item.date === mmDd) ?? null;
+}
+
+function currentAnniversaryStatus(): AnniversaryStatus {
+  const active = matchAnniversary(simulatedAnniversaryDate ?? todayMmDd());
+  return {
+    list: anniversaries,
+    activeId: active?.id ?? null,
+    simulated: simulatedAnniversaryDate !== null,
+  };
+}
+
+function broadcastAnniversary(): void {
+  const status = currentAnniversaryStatus();
+  for (const window of [petWindow, reminderWindow, dashboardWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send('anniversary:changed', status);
+  }
 }
 
 const defaultSpec = specData as PetSpec;
@@ -805,6 +838,19 @@ function registerIpc(): void {
     assertSender(event, ['pet', 'dashboard']);
     if (typeof petId !== 'string' || petId.length > 64) throw new TypeError('Invalid pet id');
     return activatePet(petId);
+  });
+  ipcMain.handle('anniversaries:status', (event) => {
+    assertSender(event, ['pet', 'dashboard', 'reminder']);
+    return currentAnniversaryStatus();
+  });
+  ipcMain.handle('anniversaries:simulate', (event, date: unknown) => {
+    assertSender(event, ['dashboard']);
+    if (date !== null && (typeof date !== 'string' || !/^\d{2}-\d{2}$/.test(date))) {
+      throw new TypeError('Invalid anniversary date; expected MM-DD or null');
+    }
+    simulatedAnniversaryDate = date;
+    broadcastAnniversary();
+    return currentAnniversaryStatus();
   });
   ipcMain.handle('window:hide-reminder', (event) => { assertSender(event, ['reminder']); reminderWindow?.hide(); });
   ipcMain.handle('window:hide-dashboard', (event) => { assertSender(event, ['dashboard']); dashboardWindow?.hide(); });

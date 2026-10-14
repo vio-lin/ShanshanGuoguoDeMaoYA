@@ -31,6 +31,9 @@
       border-radius: var(--radius, 24px);
       padding: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       display: flex;
@@ -225,21 +228,95 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 4px;
+      min-height: 0;
     }
     .content-scroll::-webkit-scrollbar {
-      width: 4px;
+      width: 8px;
     }
     .content-scroll::-webkit-scrollbar-thumb {
       background: var(--accent, #ffc987);
-      border-radius: 2px;
+      border-radius: 4px;
     }
+    .anniversary-box {
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 6px;
+      border: 1px solid var(--border, #eee);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .anniversary-box::-webkit-scrollbar {
+      width: 6px;
+    }
+    .anniversary-box::-webkit-scrollbar-thumb {
+      background: var(--accent, #ffc987);
+      border-radius: 3px;
+    }
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: var(--background, #fff7ed);
+      border-radius: 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 0;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted, #9a7b6a);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--surface, #fff);
+      color: var(--text, #3a2a20);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+    .changelog-item {
+      padding: 10px 12px;
+      background: var(--background, #fff7ed);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .changelog-item:hover { background: #ffeedd; }
+    .changelog-item .ver-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .changelog-item .ver { font-weight: 600; color: var(--text, #3a2a20); font-size: 14px; }
+    .changelog-item .date { font-size: 12px; color: var(--muted, #9a7b6a); }
+    .changelog-item .changes {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text, #3a2a20);
+      line-height: 1.6;
+      display: none;
+    }
+    .changelog-item.expanded .changes { display: block; }
+    .changelog-item .changes ul { padding-left: 18px; }
   </style>
 </head>
 <body>
   <div id="dashboard">
     <div class="card" style="position: relative; flex: 1; display: flex; flex-direction: column;">
       <button class="close-btn" id="close-btn">×</button>
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="home">🏠 主页</button>
+        <button class="tab-btn" data-tab="festival">🎂 节日</button>
+        <button class="tab-btn" data-tab="changelog">📋 更新日志</button>
+      </div>
       <div class="content-scroll">
+        <!-- 主页 tab -->
+        <div class="tab-page active" id="tab-home">
         <div class="header">
           <div class="pet-avatar">🐱</div>
           <div class="pet-info">
@@ -302,9 +379,30 @@
             </div>
           </div>
         </div>
+        </div>
 
+        <!-- 节日 tab -->
+        <div class="tab-page" id="tab-festival">
         <div class="settings-group">
-          <div class="section-title">🔄 更新</div>
+          <div class="section-title">🎂 节日待机</div>
+          <div class="setting-desc" style="margin-bottom: 10px;">
+            当天命中节日时，桌宠自动切换到特殊待机动作。点击「预览」可查看效果。
+          </div>
+          <div class="anniversary-box">
+            <div id="anniversary-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          </div>
+          <div class="setting-desc" id="anniversary-status" style="margin-top: 8px;"></div>
+        </div>
+        </div>
+
+        <!-- 更新日志 tab -->
+        <div class="tab-page" id="tab-changelog">
+        <div class="settings-group">
+          <div class="section-title">📋 版本更新</div>
+          <div id="changelog-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+        <div class="settings-group">
+          <div class="section-title">🔄 更新检查</div>
           <div class="setting-item">
             <div>
               <div class="setting-label">当前版本</div>
@@ -313,6 +411,7 @@
             <button class="update-btn" id="update-btn">检查更新</button>
           </div>
           <div class="setting-desc" id="update-status" style="margin-top: 8px; display: none;"></div>
+        </div>
         </div>
       </div>
     </div>
