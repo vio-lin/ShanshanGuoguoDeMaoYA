@@ -412,6 +412,11 @@ function setupTabs(): void {
 // 版本更新日志
 const CHANGELOG = [
   {
+    version: '1.3.0',
+    date: '2026-11',
+    changes: ['🤖 Claude Code 打通：Agent 任务实时上桌宠（需要输入/任务完成泡泡，多会话堆叠）', '📅 定任务/会议 → 后台提醒（本地接口，支持 leadMinutes 提前提醒）', '🧰 一键安装 Claude hooks 与 pet-reminder 技能，面板新增「🤖 Claude 技能」安装入口'],
+  },
+  {
     version: '1.2.0',
     date: '2026-10',
     changes: ['🎉 新增节日待机：妮妮生日（戴生日帽+蛋糕）', '🎂 节日系统：按日期自动切换特殊待机帧', '🔧 小屋面板改为 tab 布局（主页/节日/更新日志）'],
@@ -420,6 +425,11 @@ const CHANGELOG = [
     version: '1.1.0',
     date: '2026-09',
     changes: ['🐱 新增第二只宠物妮妮，支持切换', '📦 支持自动更新检查', '🎨 优化动作帧和待机节奏'],
+  },
+  {
+    version: '1.0.1',
+    date: '2026-09',
+    changes: ['📥 新增自动更新：托盘菜单与小屋面板支持「检查更新」，新版本直达下载页'],
   },
   {
     version: '1.0.0',
