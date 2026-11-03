@@ -33,9 +33,29 @@ SKILLS_ROOT = os.path.join(HOME, ".claude", "skills")
 DEST_DIR = os.path.join(SKILLS_ROOT, SKILL_NAME)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(HERE)  # pet-app/
-SRC_SKILL_MD = os.path.join(HERE, "skills", SKILL_NAME, "SKILL.md")
-SRC_REMINDER_PY = os.path.join(PROJECT_ROOT, "tools", "add-reminder.py")
+
+
+def resolve_sources() -> tuple:
+    """返回 (SKILL.md 源, add-reminder.py 源)。
+
+    兼容两种布局：
+    - 源码运行：脚本在 <工程>/tools/，技能目录在 <工程>/tools/skills/，提醒脚本在 <工程>/tools/
+    - 打包产物：extraResource 把三者放进 <app>/Contents/Resources/（脚本与 add-reminder.py、skills/ 并列）
+    """
+    candidates = [
+        (os.path.join(HERE, "skills", SKILL_NAME, "SKILL.md"), os.path.join(HERE, "add-reminder.py")),  # 打包布局
+        (os.path.join(HERE, "skills", SKILL_NAME, "SKILL.md"), os.path.join(os.path.dirname(HERE), "tools", "add-reminder.py")),  # 源码布局
+    ]
+    for md, py in candidates:
+        if os.path.isfile(md) and os.path.isfile(py):
+            return md, py
+    raise SystemExit(
+        "错误：找不到技能源文件（源码布局需 <工程>/tools/skills/pet-reminder/SKILL.md 与 "
+        "<工程>/tools/add-reminder.py；打包布局需 Resources/skills/ 与 Resources/add-reminder.py）"
+    )
+
+
+SRC_SKILL_MD, SRC_REMINDER_PY = resolve_sources()
 
 FILES = (
     (SRC_SKILL_MD, os.path.join(DEST_DIR, "SKILL.md")),

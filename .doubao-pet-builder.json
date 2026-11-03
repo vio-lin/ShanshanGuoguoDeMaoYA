@@ -3,9 +3,9 @@
   "templateContractVersion": 5,
   "specSchemaVersion": 5,
   "criticalFileHashes": {
-    "forge.config.js": "855b31f685975f1b5bca03c3f9eede85ad3e95e9fc0650a57a9d7ef080331c33",
+    "forge.config.js": "8bee9b8035b951ab293b263e1ca3515d4c576b386371b45bad541d5cdb9ace9f",
     "webpack.renderer.config.js": "f0cbfe9f4f805126d0dd854b4024df83b2d08c2d67145ecae6bc29e5268ddda1",
-    "src/main.ts": "6e92a347d8f057c1f675413a0ac1f5cde6a219755643b522dc18af7bbe3ddd89",
+    "src/main.ts": "c0e0b2abdd47857c6f13a85387ff7e6181a343f0f5e3413a640f7ef82291a617",
     "src/preload.ts": "9faec6b21c09c06e69b6a403600344f14fc4651aac37d4bbc60a3c7c20cb2313",
     "src/main/data-validation.ts": "d54fcd558ab48ad8e0f759a4fcceae84fdcdf322b3d6f0f1192cd4b60499447f",
     "src/renderer/pet/state-machine.ts": "654d9258a900144db33195d6a7de8a3f95a1f434b90fea89c42d435a3b52a5fe",

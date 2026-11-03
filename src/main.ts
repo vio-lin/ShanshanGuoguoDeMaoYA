@@ -952,7 +952,10 @@ function registerIpc(): void {
 const execFileAsync = promisify(execFile);
 
 async function runSkillScript(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const script = path.join(app.getAppPath(), 'tools', 'install-claude-skill.py');
+  // 打包后脚本经 extraResource 放在 Contents/Resources/（asar 内路径无法被外部 python3 读取）
+  const script = app.isPackaged
+    ? path.join(process.resourcesPath, 'install-claude-skill.py')
+    : path.join(app.getAppPath(), 'tools', 'install-claude-skill.py');
   try {
     const { stdout, stderr } = await execFileAsync('python3', [script, ...args], { timeout: 60_000 });
     return { code: 0, stdout: String(stdout), stderr: String(stderr) };

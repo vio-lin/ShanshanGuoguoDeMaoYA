@@ -49,6 +49,16 @@ module.exports = {
     name: spec.app.name,
     executableName: spec.app.name,
     osxSign: false,
+    // 技能安装器需要的真实文件：asar 内路径不可被外部 python3 直接访问，
+    // 通过 extraResource 放进 Contents/Resources/（保留 basename）：
+    //   install-claude-skill.py -> Resources/install-claude-skill.py
+    //   add-reminder.py         -> Resources/add-reminder.py
+    //   tools/skills            -> Resources/skills/
+    extraResource: [
+      path.resolve(__dirname, 'tools/install-claude-skill.py'),
+      path.resolve(__dirname, 'tools/add-reminder.py'),
+      path.resolve(__dirname, 'tools/skills'),
+    ],
     download: process.env.PET_VERIFIED_ELECTRON_CACHE === '1' ? {
       cacheRoot: process.env.PET_ELECTRON_CACHE_ROOT,
       mirrorOptions: { mirror: process.env.PET_ELECTRON_MIRROR },
