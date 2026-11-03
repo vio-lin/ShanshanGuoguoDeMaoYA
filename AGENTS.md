@@ -106,4 +106,13 @@ npm run test:dev-smoke       # 冒烟测试
 
 - **普通提交（非版本更新）**：commit message 末尾加 `[skip ci]`，避免每次改图/改代码都触发 GitHub Actions 双平台构建。
 - **版本发布提交**：bump 版本号的提交**禁止带** `[skip ci]`——GitHub 对含 `[skip ci]` 的提交会跳过 push/tag 触发的全部 workflow（tag 的 release job 依赖它）。已踩坑：v1.0.1 首推 tag 因 `[skip ci]` 被跳过，需改用无 `[skip ci]` 的发布提交重建 tag 才能触发构建。
-- 发布流程：改 `package.json` / `package-lock.json` / `pet-spec.json` 版本号（三处一致）→ 同步 `.doubao-pet-builder.json` 受保护哈希 → `npm run check` → 提交（不带 skip ci）→ 打 `vX.Y.Z` tag 推送（workflow `tags: ['v*']` 触发双平台构建 + Release 自动发布）。
+
+### 版本发布固定流程（每次发版必须完整执行，缺一不可）
+
+1. **版本号统一**：`package.json`、`package-lock.json`（root + `packages[""]`）、根 `pet-spec.json`、`src/pets/ragdoll/pet-spec.json`、`src/pets/nini/pet-spec.json` 共 6 处改为新版本号（如 `1.3.1`），保持一致。
+2. **重算并确认 hash 校验**：改动受保护文件（`package.json`、`package-lock.json`、`forge.config.js`、`src/main.ts` 等，见 `.doubao-pet-builder.json#criticalFileHashes`）后，必须用 `python3` 重算 sha256 写入 `.doubao-pet-builder.json`，然后 `npm run check`，**确认输出 `Development contract: PASS (0 issue(s))`** 才算 hash 校验通过；不通过不得提交。
+3. **更新代码中 release note 日志**：`src/renderer/dashboard/index.ts` 顶部 `CHANGELOG` 数组新增一条（版本号/日期/本次改动要点，沿用 emoji 列表风格），顺序置顶。
+4. **更新 README release note**：`README.md`「版本更新」表格顶部新增一行（`| 版本号 | 日期 | 改动内容 |`），改动描述与 CHANGELOG 一致。
+5. **最终检查**：`npm run check` 全绿（Development contract / UI QA / Experience / Asset QA）后，提交（**不带 skip ci**）→ 打 `vX.Y.Z` tag 并推送（本地 + 远程）→ 远程 `main` 与 tag 都指向发布提交，workflow 触发双平台构建 + Release 自动发布。
+
+- 发布流程示例：改版本号（6 处）→ 重算哈希 → 更新 CHANGELOG / README → `npm run check` 确认 hash PASS → 提交 + tag + push。

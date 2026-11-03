@@ -412,6 +412,11 @@ function setupTabs(): void {
 // 版本更新日志
 const CHANGELOG = [
   {
+    version: '1.3.1',
+    date: '2026-11',
+    changes: ['🔧 修复打包版面板「安装技能」失败：技能安装器与资源随包输出（extraResource），打包环境改用 resourcesPath 定位，不再指向 asar 内路径'],
+  },
+  {
     version: '1.3.0',
     date: '2026-11',
     changes: ['🤖 Claude Code 打通：Agent 任务实时上桌宠（需要输入/任务完成泡泡，多会话堆叠）', '📅 定任务/会议 → 后台提醒（本地接口，支持 leadMinutes 提前提醒）', '🧰 一键安装 Claude hooks 与 pet-reminder 技能，面板新增「🤖 Claude 技能」安装入口'],
