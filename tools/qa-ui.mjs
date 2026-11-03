@@ -10,6 +10,9 @@ const files = {
   dashboard: await readFile(path.join(root, 'src', 'renderer', 'dashboard', 'index.css'), 'utf8'),
   reminder: await readFile(path.join(root, 'src', 'renderer', 'reminder', 'index.css'), 'utf8'),
   pet: await readFile(path.join(root, 'src', 'renderer', 'pet', 'index.css'), 'utf8'),
+  petHtml: await readFile(path.join(root, 'src', 'renderer', 'pet', 'index.html'), 'utf8'),
+  petTs: await readFile(path.join(root, 'src', 'renderer', 'pet', 'index.ts'), 'utf8'),
+  bridge: await readFile(path.join(root, 'src', 'main', 'agent-bridge.ts'), 'utf8'),
 };
 const checks = [];
 const add = (id, passed, detail) => checks.push({ id, passed, detail });
@@ -22,6 +25,9 @@ add('reminder-hidden-scrollbar', /scrollbar-width:\s*none/.test(files.reminder) 
 add('native-control-reset', /appearance:\s*none/.test(files.dashboard) && /appearance:\s*none/.test(files.reminder), 'native form controls must reset OS appearance');
 add('png-tray-runtime', /require\.context\(\s*['"]\.\/pets['"]\s*,\s*true\s*,\s*\/tray-icon/.test(files.main) && /trayIconPathFor\(/.test(files.main) && /nativeImage\.createFromPath/.test(files.main) && /\.isEmpty\(\)/.test(files.main) && !/createFromDataURL/.test(files.main), 'tray must resolve the per-pet bundled PNG beside the webpack main entry and reject an empty native image');
 add('menu-emoji', ['⏰', '🏠', '🖱️', '🙈', '🐾', '🚪'].every((emoji) => files.main.includes(emoji)) && spec.experience.interactions.every((interaction) => typeof interaction.emoji === 'string' && interaction.emoji.length > 0), 'system and interaction menus need semantic emoji');
+add('agent-bridge-localhost', /127\.0\.0\.1/.test(files.bridge) && /\/agent-task/.test(files.bridge) && /assertAgentTaskEvent/.test(files.bridge) && /MAX_BODY_BYTES/.test(files.bridge) && /64 \* 1024/.test(files.bridge), 'agent bridge must be a localhost-only HTTP endpoint validating agent task payloads with a body cap');
+add('agent-task-link', /startAgentBridge/.test(files.main) && /handleAgentTask/.test(files.main) && /agent:task/.test(files.main) && /sendActivity/.test(files.main), 'main must start the agent bridge and route agent events into activity plus bubble');
+add('pet-agent-bubble', /agent-bubble/.test(files.petHtml) && /onAgentTask/.test(files.petTs) && /showAgentBubble/.test(files.petTs) && /need-input/.test(files.petTs), 'pet renderer must render an agent task bubble and subscribe to agent:task');
 
 const baseWindow = Number(spec.experience?.petSizing?.baseWindowPx);
 const defaultScale = Number(spec.experience?.petSizing?.defaultScale);

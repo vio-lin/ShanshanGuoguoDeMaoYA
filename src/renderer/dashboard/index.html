@@ -303,6 +303,125 @@
     }
     .changelog-item.expanded .changes { display: block; }
     .changelog-item .changes ul { padding-left: 18px; }
+
+    /* 日历 */
+    .calendar {
+      background: var(--surface, #fff);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .calendar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+    }
+    .calendar-nav {
+      display: flex;
+      gap: 6px;
+    }
+    .calendar-nav button {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 8px;
+      background: var(--background, #fff7ed);
+      color: var(--text, #3a2a20);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .calendar-nav button:hover { background: #ffeedd; }
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .calendar-weekdays div {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted, #9a7b6a);
+      padding: 4px 0;
+    }
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text, #3a2a20);
+      cursor: default;
+      position: relative;
+    }
+    .cal-day.other-month { opacity: 0.25; }
+    .cal-day.today {
+      background: var(--primary, #ff8a24);
+      color: #fff;
+      font-weight: 600;
+    }
+    .cal-day.has-event {
+      background: var(--background, #fff7ed);
+      cursor: pointer;
+      border: 1.5px solid var(--accent, #ffc987);
+    }
+    .cal-day.has-event:hover { background: #ffeedd; }
+    .cal-day .event-label {
+      font-size: 9px;
+      color: var(--primary, #ff8a24);
+      font-weight: 600;
+      margin-top: 2px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 2px;
+    }
+    .cal-day.today .event-label { color: #fff; }
+    .calendar-event-detail {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--background, #fff7ed);
+      border-radius: 12px;
+      display: none;
+    }
+    .calendar-event-detail.show { display: block; }
+    .calendar-event-detail .ev-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+      margin-bottom: 4px;
+    }
+    .calendar-event-detail .ev-desc {
+      font-size: 12px;
+      color: var(--muted, #9a7b6a);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .calendar-event-detail button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary, #ff8a24);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -311,6 +430,7 @@
       <button class="close-btn" id="close-btn">×</button>
       <div class="tab-nav">
         <button class="tab-btn active" data-tab="home">🏠 主页</button>
+        <button class="tab-btn" data-tab="todo">📝 待办</button>
         <button class="tab-btn" data-tab="festival">🎂 节日</button>
         <button class="tab-btn" data-tab="changelog">📋 更新日志</button>
       </div>
@@ -379,19 +499,80 @@
             </div>
           </div>
         </div>
+
+        <div class="settings-group">
+          <div class="section-title">🤖 Claude 技能</div>
+          <div class="setting-desc" style="margin-bottom: 10px;">
+            在 Claude Code 里说「小猫咪 帮我…」即可把任务/会议直接送到桌宠提醒。
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">技能状态</div>
+              <div class="setting-desc" id="skill-status">检查中…</div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div style="flex: 1;">
+              <div class="setting-label">触发关键字</div>
+              <div class="setting-desc" style="margin-top: 6px;">
+                <button class="update-btn" id="skill-keyword-btn" style="white-space: normal; text-align: left;">小猫咪 帮我 加个会议，今天下午 3 点</button>
+              </div>
+              <div class="setting-desc" id="skill-copied" style="display: none; color: var(--primary, #ff8a24); margin-top: 6px;">
+                已复制示例，粘贴到 Claude Code 发送即可触发
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">安装到 Claude 全局技能目录</div>
+              <div class="setting-desc">写入 ~/.claude/skills/pet-reminder/，所有项目可用</div>
+            </div>
+            <button class="update-btn" id="skill-install-btn">安装 / 更新</button>
+          </div>
+          <div class="setting-desc" id="skill-install-status" style="margin-top: 8px; display: none;"></div>
+        </div>
+        </div>
+
+        <!-- 待办 tab -->
+        <div class="tab-page" id="tab-todo">
+        <div class="settings-group">
+          <div class="section-title">📝 待办提醒</div>
+          <div class="setting-desc" style="margin-bottom: 10px;">
+            右键桌宠 →「⏰ 添加提醒」可创建新待办。
+          </div>
+          <div id="todo-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          <div class="setting-desc" id="todo-empty" style="text-align: center; color: var(--muted, #9a7b6a); padding: 20px 0;">
+            暂无待办
+          </div>
+        </div>
         </div>
 
         <!-- 节日 tab -->
         <div class="tab-page" id="tab-festival">
         <div class="settings-group">
-          <div class="section-title">🎂 节日待机</div>
-          <div class="setting-desc" style="margin-bottom: 10px;">
-            当天命中节日时，桌宠自动切换到特殊待机动作。点击「预览」可查看效果。
+          <div class="section-title">🎂 节日日历</div>
+          <div class="calendar">
+            <div class="calendar-header">
+              <div class="calendar-title" id="cal-title">2026年1月</div>
+              <div class="calendar-nav">
+                <button id="cal-prev">‹</button>
+                <button id="cal-next">›</button>
+              </div>
+            </div>
+            <div class="calendar-weekdays">
+              <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+            </div>
+            <div class="calendar-days" id="cal-days"></div>
           </div>
-          <div class="anniversary-box">
-            <div id="anniversary-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          <div class="calendar-event-detail" id="cal-event-detail">
+            <div class="ev-title" id="ev-title"></div>
+            <div class="ev-desc" id="ev-desc"></div>
+            <button id="ev-preview">预览效果</button>
           </div>
-          <div class="setting-desc" id="anniversary-status" style="margin-top: 8px;"></div>
+          <div id="anniversary-status-row" style="margin-top: 10px; display: none; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--background, #fff7ed); border-radius: 10px;">
+            <div class="setting-desc" id="anniversary-status" style="margin-top: 0;"></div>
+            <button id="anniversary-reset" style="padding: 6px 14px; border: none; border-radius: 8px; background: var(--primary, #ff8a24); color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap;">恢复正常</button>
+          </div>
         </div>
         </div>
 

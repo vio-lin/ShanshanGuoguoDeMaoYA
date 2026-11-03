@@ -235,74 +235,163 @@ async function loadUpdateInfo(): Promise<void> {
   });
 }
 
-// 纪念日测试区
-async function loadAnniversaries(): Promise<void> {
-  const listEl = document.getElementById('anniversary-list') as HTMLDivElement | null;
-  const statusEl = document.getElementById('anniversary-status') as HTMLDivElement | null;
-  if (!listEl || !statusEl) return;
-  const listBox: HTMLDivElement = listEl;
-  const statusBox: HTMLDivElement = statusEl;
+// 纪念日日历
+let calYear: number = new Date().getFullYear();
+let calMonth: number = new Date().getMonth(); // 0-indexed
+let anniversaryData: AnniversaryStatus | null = null;
 
-  function render(status: AnniversaryStatus): void {
-    listBox.replaceChildren();
-    if (status.list.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'setting-desc';
-      empty.textContent = '（暂无纪念日，在 src/anniversaries/index.json 添加后重启应用）';
-      listBox.appendChild(empty);
-    } else {
-      for (const item of status.list) {
-        const row = document.createElement('div');
-        row.className = 'setting-item';
-        const isActive = item.id === status.activeId;
-        row.style.opacity = isActive ? '1' : '0.75';
+function renderCalendar(): void {
+  const titleEl = document.getElementById('cal-title');
+  const daysEl = document.getElementById('cal-days');
+  if (!titleEl || !daysEl) return;
 
-        const labelBox = document.createElement('div');
-        const label = document.createElement('div');
-        label.className = 'setting-label';
-        label.textContent = `${item.date}  ${item.title}${isActive ? '  ✓' : ''}`;
-        const desc = document.createElement('div');
-        desc.className = 'setting-desc';
-        desc.textContent = item.description;
-        labelBox.append(label, desc);
+  titleEl.textContent = `${calYear}年${calMonth + 1}月`;
+  daysEl.replaceChildren();
 
-        const btn = document.createElement('button');
-        btn.className = 'update-btn';
-        btn.style.padding = '6px 12px';
-        btn.style.fontSize = '12px';
-        btn.textContent = isActive ? '恢复正常' : '预览';
-        btn.addEventListener('click', async () => {
-          try {
-            const next = isActive ? null : item.date;
-            const result = await window.petAPI?.anniversaries.simulate(next);
-            if (result) render(result);
-          } catch (error) {
-            console.error('Failed to simulate anniversary:', error);
-          }
-        });
-        row.append(labelBox, btn);
-        listBox.appendChild(row);
-      }
-    }
+  const today = new Date();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(calYear, calMonth, 0).getDate();
 
-    if (status.activeId) {
-      const active = status.list.find((item) => item.id === status.activeId);
-      statusBox.textContent = status.simulated
-        ? `当前为模拟状态：${active?.title ?? ''}（点"恢复正常"回到今天）`
-        : `今天命中：${active?.title ?? ''}`;
-    } else {
-      statusBox.textContent = status.simulated ? '当前为模拟状态：无命中（恢复中）' : '今天无纪念日';
+  // 纪念日映射: "MM-DD" -> Anniversary
+  const eventMap = new Map<string, Anniversary>();
+  if (anniversaryData) {
+    for (const item of anniversaryData.list) {
+      eventMap.set(item.date, item);
     }
   }
 
+  // 上个月补位
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const day = daysInPrevMonth - i;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day other-month';
+    cell.textContent = String(day);
+    daysEl.appendChild(cell);
+  }
+
+  // 本月
+  for (let d = 1; d <= daysInMonth; d++) {
+    const mm = String(calMonth + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    const dateKey = `${mm}-${dd}`;
+    const event = eventMap.get(dateKey);
+    const isToday = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (isToday) cell.classList.add('today');
+    if (event) cell.classList.add('has-event');
+    cell.textContent = String(d);
+    if (event) {
+      const label = document.createElement('div');
+      label.className = 'event-label';
+      label.textContent = event.title;
+      cell.appendChild(label);
+      cell.addEventListener('click', () => showEventDetail(event));
+    }
+    daysEl.appendChild(cell);
+  }
+
+  // 下个月补位
+  const totalCells = firstDay + daysInMonth;
+  const trailing = (7 - (totalCells % 7)) % 7;
+  for (let d = 1; d <= trailing; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day other-month';
+    cell.textContent = String(d);
+    daysEl.appendChild(cell);
+  }
+}
+
+function showEventDetail(anniversary: Anniversary): void {
+  const detail = document.getElementById('cal-event-detail');
+  const title = document.getElementById('ev-title');
+  const desc = document.getElementById('ev-desc');
+  const previewBtn = document.getElementById('ev-preview');
+  const statusEl = document.getElementById('anniversary-status');
+  if (!detail || !title || !desc || !previewBtn) return;
+
+  title.textContent = `🎂 ${anniversary.title}`;
+  desc.textContent = `${anniversary.date} · ${anniversary.description}`;
+  detail.classList.add('show');
+
+  const isActive = anniversaryData?.activeId === anniversary.id;
+  previewBtn.textContent = isActive ? '恢复正常' : '预览效果';
+  previewBtn.onclick = async () => {
+    try {
+      const next = isActive ? null : anniversary.date;
+      const result = await window.petAPI?.anniversaries.simulate(next);
+      if (result) {
+        anniversaryData = result;
+        renderCalendar();
+        renderStatus(result);
+      }
+    } catch (error) {
+      console.error('Failed to simulate anniversary:', error);
+    }
+  };
+}
+
+function renderStatus(status: AnniversaryStatus): void {
+  const statusEl = document.getElementById('anniversary-status');
+  const rowEl = document.getElementById('anniversary-status-row');
+  if (!statusEl || !rowEl) return;
+  if (status.activeId) {
+    const active = status.list.find((item) => item.id === status.activeId);
+    statusEl.textContent = status.simulated
+      ? `当前模拟：${active?.title ?? ''}`
+      : `今天命中：${active?.title ?? ''}`;
+  } else {
+    statusEl.textContent = status.simulated ? '模拟状态：无命中' : '今天无纪念日';
+  }
+  // 只在模拟状态时显示恢复按钮
+  rowEl.style.display = status.simulated ? 'flex' : 'none';
+}
+
+async function loadAnniversaries(): Promise<void> {
   try {
     const status = await window.petAPI?.anniversaries.status();
-    if (status) render(status);
+    if (status) {
+      anniversaryData = status;
+      renderCalendar();
+      renderStatus(status);
+    }
   } catch (error) {
     console.error('Failed to load anniversaries:', error);
   }
 
-  window.petAPI?.events.onAnniversaryChanged((status) => render(status));
+  // 月份切换
+  document.getElementById('cal-prev')?.addEventListener('click', () => {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  document.getElementById('cal-next')?.addEventListener('click', () => {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  });
+
+  // 恢复正常
+  document.getElementById('anniversary-reset')?.addEventListener('click', async () => {
+    try {
+      const result = await window.petAPI?.anniversaries.simulate(null);
+      if (result) {
+        anniversaryData = result;
+        renderCalendar();
+        renderStatus(result);
+      }
+    } catch (error) {
+      console.error('Failed to reset anniversary:', error);
+    }
+  });
+
+  window.petAPI?.events.onAnniversaryChanged((status) => {
+    anniversaryData = status;
+    renderCalendar();
+    renderStatus(status);
+  });
 }
 
 // Tab 切换
@@ -370,10 +459,124 @@ function renderChangelog(): void {
   }
 }
 
+// 待办列表
+async function loadTodos(): Promise<void> {
+  const listEl = document.getElementById('todo-list');
+  const emptyEl = document.getElementById('todo-empty');
+  if (!listEl || !emptyEl) return;
+  const refresh = async (): Promise<void> => {
+    const reminders = await window.petAPI?.reminders.list();
+    listEl.replaceChildren();
+    if (!reminders || reminders.length === 0) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+    for (const r of reminders) {
+      const row = document.createElement('div');
+      row.className = 'changelog-item';
+      const verRow = document.createElement('div');
+      verRow.className = 'ver-row';
+      const text = document.createElement('span');
+      text.className = 'ver';
+      text.textContent = r.text;
+      const delBtn = document.createElement('button');
+      delBtn.className = 'update-btn';
+      delBtn.style.padding = '4px 10px';
+      delBtn.style.fontSize = '12px';
+      delBtn.textContent = '删除';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await window.petAPI?.reminders.remove(r.id);
+          await refresh();
+        } catch (err) {
+          console.error('Failed to remove reminder:', err);
+        }
+      });
+      verRow.append(text, delBtn);
+      const time = document.createElement('div');
+      time.className = 'date';
+      time.style.marginTop = '4px';
+      const due = new Date(r.dueAt);
+      const now = new Date();
+      const overdue = due < now;
+      const leadTxt = typeof r.leadMinutes === 'number' && r.leadMinutes > 0 ? ` · 提前 ${r.leadMinutes} 分钟` : '';
+      time.textContent = `${overdue ? '⚠️ 已过期 · ' : '⏰ '}${due.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${leadTxt}`;
+      row.append(verRow, time);
+      listEl.appendChild(row);
+    }
+  };
+  await refresh();
+}
+
+// Claude 技能（pet-reminder）
+async function loadSkillStatus(): Promise<void> {
+  const statusEl = document.getElementById('skill-status');
+  const installBtn = document.getElementById('skill-install-btn') as HTMLButtonElement | null;
+  if (!statusEl) return;
+  try {
+    const result = await window.petAPI?.skills.check();
+    if (!result) {
+      statusEl.textContent = '无法检查技能状态';
+      return;
+    }
+    statusEl.textContent = result.message;
+    if (installBtn) installBtn.textContent = result.upToDate ? '重新安装' : '安装 / 更新';
+  } catch (error) {
+    console.error('Failed to check skill status:', error);
+    statusEl.textContent = '技能状态检查失败';
+  }
+}
+
+function setupSkillPanel(): void {
+  const keywordBtn = document.getElementById('skill-keyword-btn') as HTMLButtonElement | null;
+  const copiedEl = document.getElementById('skill-copied') as HTMLDivElement | null;
+  const installBtn = document.getElementById('skill-install-btn') as HTMLButtonElement | null;
+  const installStatus = document.getElementById('skill-install-status') as HTMLDivElement | null;
+  if (!keywordBtn || !installBtn || !installStatus || !copiedEl) return;
+
+  const EXAMPLE = '小猫咪 帮我 加个会议，今天下午 3 点';
+
+  keywordBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(EXAMPLE);
+      copiedEl.style.display = 'block';
+      window.setTimeout(() => {
+        copiedEl.style.display = 'none';
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to copy keyword example:', error);
+    }
+  });
+
+  installBtn.addEventListener('click', async () => {
+    installBtn.disabled = true;
+    installStatus.style.display = 'block';
+    installStatus.textContent = '正在安装…';
+    try {
+      const result = await window.petAPI?.skills.install();
+      if (!result) {
+        installStatus.textContent = '安装失败：无法调用安装器';
+        return;
+      }
+      installStatus.textContent = result.message;
+      installStatus.style.color = result.ok ? 'var(--primary, #ff8a24)' : '#c0392b';
+      await loadSkillStatus();
+    } catch (error) {
+      console.error('Failed to install skill:', error);
+      installStatus.textContent = '安装失败：' + (error instanceof Error ? error.message : String(error));
+    } finally {
+      installBtn.disabled = false;
+    }
+  });
+}
+
 // 初始化
 async function init(): Promise<void> {
   setupTabs();
   renderChangelog();
+  await loadTodos();
   const settings = await window.petAPI?.settings.get();
   const profile = getPetProfile(settings?.currentPet ?? PET_PROFILES[0]!.id);
   if (profile) {
@@ -385,6 +588,8 @@ async function init(): Promise<void> {
   await loadStats();
   await loadUpdateInfo();
   await loadAnniversaries();
+  setupSkillPanel();
+  await loadSkillStatus();
 }
 
 // 监听宠物切换

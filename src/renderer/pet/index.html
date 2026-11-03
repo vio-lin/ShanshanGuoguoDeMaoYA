@@ -72,12 +72,78 @@
       opacity: 1;
       transform: translateX(-50%) translateY(-10px);
     }
+    #agent-bubbles {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      left: auto;
+      transform: none;
+      max-width: 92%;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .agent-bubble-item {
+      background: rgba(255,255,255,0.96);
+      padding: 3px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      line-height: 1.25;
+      color: #333;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+      border: 1.5px solid #43a047;
+      pointer-events: auto;
+      cursor: pointer;
+      min-width: 0;
+      max-width: 100%;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      text-align: left;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .agent-bubble-item.need-input {
+      border-color: #f57c00;
+    }
+    .agent-bubble-item.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .agent-bubble-item .agent-source {
+      display: block;
+      font-size: 7px;
+      color: #888;
+      margin-bottom: 1px;
+    }
+    .agent-bubble-more {
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-size: 8px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 8px;
+      pointer-events: auto;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .agent-bubble-more.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body>
   <div id="pet-container">
     <img id="pet-sprite" class="breathing" alt="桌宠" draggable="false">
     <div id="feedback-bubble"></div>
+    <div id="agent-bubbles"></div>
   </div>
 </body>
 </html>

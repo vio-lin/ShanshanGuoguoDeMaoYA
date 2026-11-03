@@ -76,7 +76,9 @@ export function parseReminders(value: unknown): Reminder[] {
     if (typeof obj.text !== 'string' || obj.text.trim().length < 1 || obj.text.length > 500) throw new TypeError('Invalid reminder text');
     if (typeof obj.dueAt !== 'string' || !Number.isFinite(Date.parse(obj.dueAt))) throw new TypeError('Invalid reminder dueAt');
     if (typeof obj.createdAt !== 'string' || !Number.isFinite(Date.parse(obj.createdAt))) throw new TypeError('Invalid reminder createdAt');
-    return { id: obj.id, text: obj.text, dueAt: obj.dueAt, createdAt: obj.createdAt };
+    const lead = obj.leadMinutes;
+    const leadMinutes = typeof lead === 'number' && Number.isInteger(lead) && lead >= 0 && lead <= 1440 ? lead : undefined;
+    return { id: obj.id, text: obj.text, dueAt: obj.dueAt, createdAt: obj.createdAt, ...(leadMinutes !== undefined ? { leadMinutes } : {}) };
   });
 }
 

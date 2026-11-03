@@ -29,10 +29,9 @@ const timeInput = document.getElementById('reminder-time') as HTMLInputElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
 
-// 设置默认时间为1小时后
+// 设置默认时间为当前时间
 function setDefaultTime(): void {
   const now = new Date();
-  now.setHours(now.getHours() + 1);
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');

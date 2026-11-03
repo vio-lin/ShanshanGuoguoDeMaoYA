@@ -128,6 +128,8 @@ export interface Reminder {
   text: string;
   dueAt: string;
   createdAt: string;
+  /** 提前提醒分钟数（0 = 到点提醒；缺省视为 0） */
+  leadMinutes?: number;
 }
 
 export interface StateActivity {
@@ -169,6 +171,20 @@ export interface TypingStatus {
   reason: string;
 }
 
+export type AgentTaskKind = 'task-complete' | 'need-input';
+
+export interface AgentTaskEvent {
+  kind: AgentTaskKind;
+  /** 展示文案，长度上限 500 */
+  text: string;
+  /** 事件来源，如 claude-code */
+  source?: string;
+  /** agent 会话 id（用于去重与追溯） */
+  sessionId?: string;
+  /** 事件时间（ISO 8601），缺省由主进程补 */
+  ts?: string;
+}
+
 export interface UpdateInfo {
   currentVersion: string;
   latestVersion: string;
@@ -176,6 +192,21 @@ export interface UpdateInfo {
   releaseUrl: string;
   downloadUrl: string | null;
   notes: string;
+}
+
+export interface SkillCheckResult {
+  /** 是否已安装到 ~/.claude/skills/<name>/ */
+  installed: boolean;
+  /** 已安装且内容与工程内最新一致 */
+  upToDate: boolean;
+  /** 人类可读的状态说明 */
+  message: string;
+}
+
+export interface SkillInstallResult {
+  ok: boolean;
+  state: 'installed' | 'updated' | 'unchanged' | 'error';
+  message: string;
 }
 
 export interface Anniversary {
@@ -204,7 +235,7 @@ export interface PetAPI {
   };
   reminders: {
     list: () => Promise<Reminder[]>;
-    save: (input: { text: string; dueAt: string }) => Promise<Reminder>;
+    save: (input: { text: string; dueAt: string; leadMinutes?: number }) => Promise<Reminder>;
     remove: (id: string) => Promise<boolean>;
   };
   interactions: {
@@ -236,6 +267,12 @@ export interface PetAPI {
     check: () => Promise<UpdateInfo | null>;
     open: (url: string) => Promise<void>;
   };
+  skills: {
+    /** 检查 pet-reminder 技能是否已安装且为最新 */
+    check: () => Promise<SkillCheckResult>;
+    /** 安装/更新 pet-reminder 技能到 ~/.claude/skills/（幂等） */
+    install: () => Promise<SkillInstallResult>;
+  };
   events: {
     onStateActivity: (listener: (activity: StateActivity) => void) => () => void;
     onReminder: (listener: (reminder: Reminder) => void) => () => void;
@@ -244,6 +281,7 @@ export interface PetAPI {
     onTypingStatus: (listener: (status: TypingStatus) => void) => () => void;
     onPetChanged: (listener: (petId: string) => void) => () => void;
     onAnniversaryChanged: (listener: (status: AnniversaryStatus) => void) => () => void;
+    onAgentTask: (listener: (event: AgentTaskEvent) => void) => () => void;
   };
   pets: {
     list: () => Promise<PetSummary[]>;
@@ -302,7 +340,7 @@ export function assertSettingsPatch(value: unknown): asserts value is Partial<Se
   }
 }
 
-export function assertReminderInput(value: unknown): asserts value is { text: string; dueAt: string } {
+export function assertReminderInput(value: unknown): asserts value is { text: string; dueAt: string; leadMinutes?: number } {
   if (!value || typeof value !== 'object') {
     throw new TypeError('Invalid reminder input');
   }
@@ -312,6 +350,33 @@ export function assertReminderInput(value: unknown): asserts value is { text: st
   }
   if (typeof obj.dueAt !== 'string' || isNaN(Date.parse(obj.dueAt))) {
     throw new TypeError('Invalid reminder dueAt');
+  }
+  if (obj.leadMinutes !== undefined) {
+    if (typeof obj.leadMinutes !== 'number' || !Number.isInteger(obj.leadMinutes) || obj.leadMinutes < 0 || obj.leadMinutes > 1440) {
+      throw new TypeError('Invalid reminder leadMinutes');
+    }
+  }
+}
+
+export function assertAgentTaskEvent(value: unknown): asserts value is AgentTaskEvent {
+  if (!value || typeof value !== 'object') {
+    throw new TypeError('Invalid agent task event');
+  }
+  const obj = value as Record<string, unknown>;
+  if (obj.kind !== 'task-complete' && obj.kind !== 'need-input') {
+    throw new TypeError('Invalid agent task kind');
+  }
+  if (typeof obj.text !== 'string' || obj.text.length === 0 || obj.text.length > 500) {
+    throw new TypeError('Invalid agent task text');
+  }
+  if (obj.source !== undefined && (typeof obj.source !== 'string' || obj.source.length > 64)) {
+    throw new TypeError('Invalid agent task source');
+  }
+  if (obj.sessionId !== undefined && (typeof obj.sessionId !== 'string' || obj.sessionId.length > 200)) {
+    throw new TypeError('Invalid agent task sessionId');
+  }
+  if (obj.ts !== undefined && (typeof obj.ts !== 'string' || isNaN(Date.parse(obj.ts)))) {
+    throw new TypeError('Invalid agent task ts');
   }
 }
 

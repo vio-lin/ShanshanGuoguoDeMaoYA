@@ -1,4 +1,4 @@
-import type { Anniversary, AnniversaryStatus, PetSpec, StateActivity } from '../../shared/contracts';
+import type { AgentTaskEvent, Anniversary, AnniversaryStatus, PetSpec, StateActivity } from '../../shared/contracts';
 import { exceedsDragThreshold } from '../../main/drag';
 import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import { PetStateMachine } from './state-machine';
@@ -7,6 +7,7 @@ import './index.css';
 const sprite = document.getElementById('pet-sprite') as HTMLImageElement;
 const container = document.getElementById('pet-container') as HTMLDivElement;
 const feedbackBubble = document.getElementById('feedback-bubble') as HTMLDivElement;
+const agentBubbles = document.getElementById('agent-bubbles') as HTMLDivElement;
 
 // Chromium 会默认把 img 当作可拖拽内容；桌宠只允许窗口拖拽。
 container.addEventListener('dragstart', (event) => event.preventDefault());
@@ -97,6 +98,88 @@ function showFeedback(text: string): void {
   setTimeout(() => {
     feedbackBubble.classList.remove('show');
   }, 2000);
+}
+
+// Agent 任务泡泡：按 sessionId 维护待确认队列，右上角纵向堆叠展示（最多 3 条 + 溢出计数）。
+// need-input → 入队常驻；task-complete → 该 session 出队；点击单条关闭该会话。
+interface PendingAgentItem {
+  text: string;
+  source?: string;
+  kind: AgentTaskEvent['kind'];
+}
+const MAX_AGENT_BUBBLES = 3;
+const agentPending = new Map<string, PendingAgentItem>(); // 插入序 = 触发序
+const agentBubbleTimers = new Map<string, number>(); // task-complete 自动消失
+
+function dismissAgentSession(sessionId: string): void {
+  const timer = agentBubbleTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    agentBubbleTimers.delete(sessionId);
+  }
+  if (agentPending.delete(sessionId)) renderAgentBubbles();
+}
+
+// 处理 Agent 任务事件：按 sessionId 维护待确认队列（多 session 并发），右上角纵向堆叠展示。
+function showAgentBubble(event: AgentTaskEvent): void {
+  const sessionId = event.sessionId ?? '__default__';
+  if (event.kind === 'need-input') {
+    // 同 session 重复触发 = 更新文本（幂等，不产生新条目）
+    agentPending.set(sessionId, { text: event.text, source: event.source, kind: 'need-input' });
+    const t = agentBubbleTimers.get(sessionId);
+    if (t) {
+      clearTimeout(t);
+      agentBubbleTimers.delete(sessionId);
+    }
+  } else {
+    // task-complete：若该 session 在等待队列中则出队；否则短暂显示一条完成提示
+    if (agentPending.has(sessionId)) {
+      agentPending.delete(sessionId);
+    } else {
+      agentPending.set(sessionId, { text: event.text, source: event.source, kind: 'task-complete' });
+      const timer = window.setTimeout(() => dismissAgentSession(sessionId), 6000);
+      agentBubbleTimers.set(sessionId, timer);
+    }
+  }
+  renderAgentBubbles();
+}
+
+function renderAgentBubbles(): void {
+  agentBubbles.textContent = '';
+  const items = [...agentPending.entries()];
+  // 显示最近 MAX_AGENT_BUBBLES 条，更早的进入溢出计数
+  const visible = items.slice(-MAX_AGENT_BUBBLES);
+  const overflow = items.length - visible.length;
+  for (const [sessionId, item] of visible) {
+    const el = document.createElement('div');
+    el.className = `agent-bubble-item${item.kind === 'need-input' ? ' need-input' : ''}`;
+    const src = document.createElement('span');
+    src.className = 'agent-source';
+    src.textContent = item.kind === 'task-complete' ? '🤖 Agent 完成' : '🤖 Agent 需要你';
+    el.appendChild(src);
+    el.appendChild(document.createTextNode(item.text));
+    // 用 pointerdown 立即关闭：container 的拖拽逻辑会 setPointerCapture 抢占后续事件，
+    // 若等 click 可能被吞掉导致"点击不消失"。stopPropagation 阻断冒泡进入拖拽分支。
+    el.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      dismissAgentSession(sessionId);
+    });
+    requestAnimationFrame(() => el.classList.add('show'));
+    agentBubbles.appendChild(el);
+  }
+  if (overflow > 0) {
+    const more = document.createElement('div');
+    more.className = 'agent-bubble-more';
+    more.textContent = `+${overflow} 条待处理`;
+    more.title = '点击收起最早的一条';
+    more.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      const first = items[0];
+      if (first) dismissAgentSession(first[0]);
+    });
+    requestAnimationFrame(() => more.classList.add('show'));
+    agentBubbles.appendChild(more);
+  }
 }
 
 // 切换状态
@@ -396,6 +479,11 @@ window.petAPI?.events.onPetChanged((nextPetId) => {
 // 监听纪念日命中变化
 window.petAPI?.events.onAnniversaryChanged((status) => {
   applyAnniversary(status);
+});
+
+// 监听 Agent 任务事件（任务完成 / 需要输入）；多 session 并发时按 sessionId 入队/出队
+window.petAPI?.events.onAgentTask((event) => {
+  showAgentBubble(event);
 });
 
 init();

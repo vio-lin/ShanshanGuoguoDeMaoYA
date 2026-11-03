@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { AnniversaryStatus, InteractionResult, InteractionSpec, PetAPI, PetStats, PetSummary, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
+import type { AgentTaskEvent, AnniversaryStatus, InteractionResult, InteractionSpec, PetAPI, PetStats, PetSummary, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, SkillCheckResult, SkillInstallResult, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 
 function subscribe<T>(channel: string, listener: (value: T) => void): () => void {
   const wrapped = (_event: Electron.IpcRendererEvent, value: T) => listener(value);
@@ -46,6 +46,10 @@ const api: PetAPI = {
     check: () => ipcRenderer.invoke('update:check') as Promise<UpdateInfo | null>,
     open: (url) => ipcRenderer.invoke('update:open', url) as Promise<void>,
   },
+  skills: {
+    check: () => ipcRenderer.invoke('skills:check') as Promise<SkillCheckResult>,
+    install: () => ipcRenderer.invoke('skills:install') as Promise<SkillInstallResult>,
+  },
   pets: {
     list: () => ipcRenderer.invoke('pets:list') as Promise<PetSummary[]>,
     activate: (petId) => ipcRenderer.invoke('pets:activate', petId) as Promise<boolean>,
@@ -62,6 +66,7 @@ const api: PetAPI = {
     onTypingStatus: (listener) => subscribe<TypingStatus>('typing:status', listener),
     onPetChanged: (listener) => subscribe<string>('pet:changed', listener),
     onAnniversaryChanged: (listener) => subscribe<AnniversaryStatus>('anniversary:changed', listener),
+    onAgentTask: (listener) => subscribe<AgentTaskEvent>('agent:task', listener),
   },
 };
 

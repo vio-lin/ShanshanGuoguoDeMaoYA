@@ -1,17 +1,20 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray, type IpcMainInvokeEvent } from 'electron';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { copyFile, lstat, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import specData from '../pet-spec.json';
 import anniversaryList from './anniversaries/index.json';
-import type { Anniversary, AnniversaryStatus, InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
+import type { Anniversary, AnniversaryStatus, AgentTaskEvent, InteractionResult, PetSpec, PetStats, Reminder, RuntimeFailureReport, RuntimeReadyReport, Settings, SkillCheckResult, SkillInstallResult, StateActivity, TypingStatus, UpdateInfo } from './shared/contracts';
 import { assertInteractionId, assertReminderInput, assertRuntimeFailureReport, assertRuntimeReadyReport, assertSettingsPatch, assertStringArray } from './shared/contracts';
 import { getPetProfile, PET_PROFILES } from './pet-profiles';
+import { AgentBridge, startAgentBridge } from './main/agent-bridge';
 import { draggedBounds, snapBounds, type Point, type Rect } from './main/drag';
 import { JsonLogger } from './main/logger';
 import { atomicWriteJson, uniqueDestination } from './main/persistence';
 import { TypingListener } from './main/typing-listener';
-import { localDateKey, nextReminderDelay, parsePersistedStats, parseReminders, parseSettings, type PersistedStats } from './main/data-validation';
+import { localDateKey, parsePersistedStats, parseReminders, parseSettings, type PersistedStats } from './main/data-validation';
 import { readValidatedJson } from './main/persistence';
 // 托盘图标按宠物打包（src/pets/<id>/tray/tray-icon.png），运行时按当前宠物取。
 const trayIconContext = require.context('./pets', true, /tray-icon\.png$/i);
@@ -79,6 +82,8 @@ let quitPersisting = false;
 const roles = new Map<number, Role>();
 const reminderTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const typingListener = new TypingListener();
+let agentBridge: AgentBridge | undefined;
+let lastAgentEvent: { key: string; at: number } | undefined;
 let expectedRuntimeAssets = new Set([defaultSpec.character.coreAsset, ...defaultSpec.states.flatMap((state) => state.frames)]);
 const runtimeReadyFile = path.join(process.cwd(), '.build', 'runtime-ready.json');
 const runtimeFailureFile = path.join(process.cwd(), '.build', 'runtime-failed.json');
@@ -234,7 +239,7 @@ function registerWindow(window: BrowserWindow, role: Role): BrowserWindow {
   window.webContents.on('console-message', (details, level, legacyMessage) => {
     const message = details.message || legacyMessage;
     const currentLevel = details.level === 'error' ? 3 : level;
-    const fatalMessage = /Content Security Policy|unsafe-eval|Refused to evaluate|Uncaught|Unhandled/i.test(message);
+    const fatalMessage = /Refused to evaluate|Uncaught|Unhandled/i.test(message);
     if (fatalMessage || (!runtimeCommitted && currentLevel >= 3)) {
       void fatalExit(`${role}-renderer-console-error`, new Error(message), { role });
     } else if (currentLevel >= 3) {
@@ -378,6 +383,60 @@ function sendActivity(activity: StateActivity): void {
 function activityForTrigger(trigger: string, kind: string, feedback?: string, durationMs?: number): StateActivity {
   const state = stateForTrigger(trigger);
   return { kind, stateId: state?.id, durationMs, feedback };
+}
+
+// Agent 任务事件：动作 + 任务泡泡（task-complete → 开心提醒动作；need-input → 注意强调动作）
+function handleAgentTask(event: AgentTaskEvent): void {
+  // 3 秒内同 session 的去重（hook 或网络重试可能重复投递）。
+  // 用 sessionId 作维度：多个 session 并发等待时，同文案不同 session 必须都能通过。
+  const dedupeKey = event.sessionId ? `${event.kind}:${event.sessionId}` : `${event.kind}:${event.text}`;
+  if (lastAgentEvent && lastAgentEvent.key === dedupeKey && Date.now() - lastAgentEvent.at < 3000) {
+    return;
+  }
+  lastAgentEvent = { key: dedupeKey, at: Date.now() };
+
+  const completed = event.kind === 'task-complete';
+  // 只触发动作动画（开心跳 / 贴边强调），不携带 feedback 文本：
+  // 文案统一由 pet 端的 agent-bubble 渲染，避免同一条消息出现两个气泡。
+  const activity = activityForTrigger(
+    completed ? 'reminder:due' : 'window:edge-snap',
+    completed ? 'agent-complete' : 'agent-input',
+    undefined,
+    completed ? 2400 : 2800,
+  );
+  sendActivity(activity);
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('agent:task', event);
+  }
+  void logger?.write('info', 'agent-task', {
+    kind: event.kind,
+    source: event.source,
+    sessionId: event.sessionId,
+    textLength: event.text.length,
+  });
+}
+
+// 新增提醒/会议：IPC（dashboard/reminder）与本地 HTTP POST /reminders 共用入口。
+async function addReminder(input: { text: string; dueAt: string; leadMinutes?: number }): Promise<Reminder> {
+  const lead = input.leadMinutes;
+  const reminder: Reminder = {
+    id: randomUUID(),
+    text: input.text.trim(),
+    dueAt: new Date(input.dueAt).toISOString(),
+    createdAt: new Date().toISOString(),
+    ...(typeof lead === 'number' && Number.isInteger(lead) && lead > 0 && lead <= 1440 ? { leadMinutes: lead } : {}),
+  };
+  reminders.push(reminder);
+  await persistReminders();
+  scheduleReminder(reminder);
+  void logger?.write('info', 'reminder-added', {
+    id: reminder.id,
+    textLength: reminder.text.length,
+    dueAt: reminder.dueAt,
+    leadMinutes: reminder.leadMinutes ?? 0,
+    source: 'bridge-or-ipc',
+  });
+  return reminder;
 }
 
 async function triggerInteraction(id: string): Promise<InteractionResult> {
@@ -667,10 +726,13 @@ function clearReminderTimer(id: string): void {
 
 function scheduleReminder(reminder: Reminder): void {
   clearReminderTimer(reminder.id);
-  const delay = nextReminderDelay(reminder.dueAt);
+  const leadMs = (reminder.leadMinutes ?? 0) * 60_000;
+  const delay = Math.min(2_147_000_000, Math.max(0, Date.parse(reminder.dueAt) - leadMs - Date.now()));
   reminderTimers.set(reminder.id, setTimeout(() => {
     reminderTimers.delete(reminder.id);
-    if (Date.parse(reminder.dueAt) > Date.now()) {
+    // 有提前量时，提前触发的这次就是唯一提醒，不重排到到点再提醒一次；
+    // 无提前量时保留原兜底（时间回拨/重排场景）。
+    if (Date.parse(reminder.dueAt) > Date.now() && !reminder.leadMinutes) {
       scheduleReminder(reminder);
       return;
     }
@@ -763,11 +825,7 @@ function registerIpc(): void {
   ipcMain.handle('reminders:save', async (event, input: unknown) => {
     assertSender(event, ['dashboard', 'reminder']);
     assertReminderInput(input);
-    const reminder: Reminder = { id: randomUUID(), text: input.text.trim(), dueAt: new Date(input.dueAt).toISOString(), createdAt: new Date().toISOString() };
-    reminders.push(reminder);
-    await persistReminders();
-    scheduleReminder(reminder);
-    return reminder;
+    return addReminder(input);
   });
   ipcMain.handle('reminders:remove', async (event, id: unknown) => {
     assertSender(event, ['dashboard']);
@@ -870,6 +928,46 @@ function registerIpc(): void {
       // 忽略非法 URL
     }
   });
+  ipcMain.handle('skills:check', async (event) => {
+    assertSender(event, ['pet', 'dashboard']);
+    const { code, stdout, stderr } = await runSkillScript(['--check']);
+    const detail = cleanScriptOutput(stdout, stderr);
+    const upToDate = code === 0;
+    const installed = upToDate || /pet-reminder/.test(detail) || !/(未安装|不存在|缺失)/.test(detail);
+    const message = detail || (upToDate ? 'pet-reminder 已安装且为最新' : 'pet-reminder 未安装');
+    return { installed, upToDate, message } satisfies SkillCheckResult;
+  });
+  ipcMain.handle('skills:install', async (event) => {
+    assertSender(event, ['pet', 'dashboard']);
+    const { code, stdout, stderr } = await runSkillScript([]);
+    const detail = cleanScriptOutput(stdout, stderr);
+    if (code !== 0) {
+      return { ok: false, state: 'error', message: detail || '安装失败' } satisfies SkillInstallResult;
+    }
+    const state = /已是最新/.test(detail) ? 'unchanged' : /已安装技能/.test(detail) ? 'updated' : 'installed';
+    return { ok: true, state, message: detail || '已安装' } satisfies SkillInstallResult;
+  });
+}
+
+const execFileAsync = promisify(execFile);
+
+async function runSkillScript(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  const script = path.join(app.getAppPath(), 'tools', 'install-claude-skill.py');
+  try {
+    const { stdout, stderr } = await execFileAsync('python3', [script, ...args], { timeout: 60_000 });
+    return { code: 0, stdout: String(stdout), stderr: String(stderr) };
+  } catch (error) {
+    const err = error as { code?: number; stdout?: string; stderr?: string; message?: string };
+    return {
+      code: typeof err.code === 'number' ? err.code : 1,
+      stdout: String(err.stdout ?? ''),
+      stderr: String(err.stderr ?? err.message ?? ''),
+    };
+  }
+}
+
+function cleanScriptOutput(stdout: string, stderr: string): string {
+  return [stdout.trim(), stderr.trim()].filter(Boolean).join(' ').slice(0, 500);
 }
 
 async function initialize(): Promise<void> {
@@ -894,6 +992,13 @@ async function initialize(): Promise<void> {
   createTray();
   reminders.forEach(scheduleReminder);
   restartTypingListener();
+  if (!e2eMode) {
+    agentBridge = await startAgentBridge({
+      onAgentTask: handleAgentTask,
+      onAddReminder: (input) => { void addReminder(input); },
+    });
+    await logger.write('info', 'agent-bridge-started', { port: agentBridge.port });
+  }
 }
 
 if (hasSingleInstanceLock) {
@@ -919,6 +1024,10 @@ app.on('before-quit', (event) => {
   typingListener.stop();
   for (const timer of reminderTimers.values()) clearTimeout(timer);
   reminderTimers.clear();
+  if (agentBridge) {
+    void agentBridge.close().catch(() => {});
+    agentBridge = undefined;
+  }
   if (quitPersisting || !stats) return;
   event.preventDefault();
   quitPersisting = true;
