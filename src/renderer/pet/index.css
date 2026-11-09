@@ -23,6 +23,13 @@ html, body {
   -webkit-user-select: none;
 }
 
+#pet-scale {
+  width: 100%;
+  height: 100%;
+  transform: scale(var(--pet-scale, 1));
+  transform-origin: center;
+}
+
 #pet-sprite {
   width: 100%;
   height: 100%;

@@ -46,8 +46,11 @@ export class PetStateMachine {
   start(stateId: string, now: number, durationMs?: number): boolean {
     const next = this.states.get(stateId);
     if (!next) return false;
-    if (this.active.state.priority > next.priority) return false;
-    if (this.active.state.id === next.id && next.interrupt === 'resume') return false;
+    // 显式切回 idle 总是允许（拖拽结束等主动停止场景），不参与优先级抢占
+    if (next.id !== this.idleState.id) {
+      if (this.active.state.priority > next.priority) return false;
+      if (this.active.state.id === next.id && next.interrupt === 'resume') return false;
+    }
     const lastCompleted = this.completedAt.get(next.id);
     if (lastCompleted !== undefined && now - lastCompleted < next.cooldownMs) return false;
     this.active = this.makeActive(next, now, durationMs);

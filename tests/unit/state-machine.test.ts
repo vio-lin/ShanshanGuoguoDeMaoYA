@@ -59,3 +59,12 @@ test('cooldown starts when an activity completes', () => {
   assert.equal(machine.start('action', 399), false);
   assert.equal(machine.start('action', 400), true);
 });
+
+test('explicit return to idle always wins over priority', () => {
+  const high = state('high', { priority: 80 });
+  const machine = new PetStateMachine([idle, high], 0);
+  machine.start('high', 0, 500);
+  assert.equal(machine.start('low', 10), false);
+  assert.equal(machine.start('idle', 20), true);
+  assert.equal(machine.tick(21).stateId, 'idle');
+});

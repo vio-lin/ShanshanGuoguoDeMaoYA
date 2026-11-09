@@ -194,6 +194,8 @@ function setState(stateId: string, durationMs?: number): void {
     url = resolveFrame(snapshot.stateId, snapshot.frame);
   }
   if (url) sprite.src = url;
+  // drag 悬空姿态主体窄于 idle，渲染层放大显示以保持视觉协调（可调）
+  document.documentElement.style.setProperty('--pet-scale', snapshot.stateId === 'drag' ? '1.2' : '1');
   // 记录移动状态开始时间
   if (stateId === 'walk' || stateId === 'stalk') {
     moveStart = performance.now();
@@ -223,6 +225,8 @@ function anniversaryFrameByIndex(frameIndex: number): string | undefined {
 function animate(timestamp: number): void {
   const snapshot = stateMachine.tick(timestamp);
   container.dataset.state = snapshot.stateId;
+  // drag 悬空姿态显示缩放随状态实时同步（覆盖 tick 自动过期路径）
+  document.documentElement.style.setProperty('--pet-scale', snapshot.stateId === 'drag' ? '1.2' : '1');
   if (snapshot.stateChanged) {
     let url: string | undefined;
     if (useAnniversaryFrames(snapshot.stateId)) {
@@ -324,6 +328,7 @@ container.addEventListener('pointermove', (event) => {
   if (event.pointerId !== activePointerId) return;
   if (!isDragging && exceedsDragThreshold(pointerStart, { x: event.clientX, y: event.clientY })) {
     isDragging = true;
+    setState('drag');
     dragBegin = window.petAPI?.window.beginDrag() ?? Promise.resolve();
   }
   if (!isDragging) return;
@@ -331,7 +336,12 @@ container.addEventListener('pointermove', (event) => {
   dragUpdatePending = true;
   requestAnimationFrame(() => {
     void (dragBegin ?? Promise.resolve())
-      .then(() => window.petAPI?.window.updateDrag())
+      .then(() => {
+        // 放下后（isDragging=false）不再续期悬空姿态，避免拖拽结束残留
+        if (!isDragging) return;
+        setState('drag');
+        return window.petAPI?.window.updateDrag();
+      })
       .catch(() => {})
       .finally(() => { dragUpdatePending = false; });
   });
@@ -346,6 +356,7 @@ function finishPointer(event: PointerEvent): void {
   dragUpdatePending = false;
   if (dragged) {
     suppressNextClick = true;
+    setState('idle');
     void (dragBegin ?? Promise.resolve())
       .then(() => window.petAPI?.window.endDrag())
       .catch(() => {});

@@ -282,11 +282,21 @@ for (const target of targets) {
       }
     }
     const seen = new Map();
+    // 创作者确认的有意重复帧对（帧索引）：无缝循环闭合 / 末帧静态收尾
+    // 新增有意重复时在此登记，格式 [较早索引, 较晚索引]
+    const ALLOWED_DUPLICATE_PAIRS = {
+      idle: [[0, 4]],
+      peek: [[3, 4]],
+      bury: [[2, 4]],
+    };
     for (let index = 0; index < stateRecords.length; index += 1) {
       const record = stateRecords[index];
       const previous = seen.get(record.sha256);
       const allowedBlinkClosure = state.id === 'blink' && previous === 0 && index === stateRecords.length - 1 && stateRecords.length >= 3;
-      if (previous !== undefined && !allowedBlinkClosure) {
+      const allowedPair = (ALLOWED_DUPLICATE_PAIRS[state.id] || []).some(
+        ([a, b]) => (previous === a && index === b) || (previous === b && index === a),
+      );
+      if (previous !== undefined && !allowedBlinkClosure && !allowedPair) {
         const message = `duplicate pixels do not create a real animation frame: ${record.frame}`;
         if (regressionFixture) record.warnings.push(message);
         else addDiagnostic(record.errors, record.diagnostics, 'DUPLICATE_FRAME', message);
