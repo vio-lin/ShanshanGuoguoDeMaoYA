@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"默认权限：窗口拖拽 + 基础窗口操作","local":true,"windows":["pet","dashboard","reminder"],"permissions":["core:default","core:window:allow-start-dragging"]}}

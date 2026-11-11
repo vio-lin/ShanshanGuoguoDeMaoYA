@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>桌宠小屋</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #dashboard {
+      width: 100%;
+      height: 100%;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface, #ffffff);
+      border-radius: var(--radius, 24px);
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .pet-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--background, #fff7ed);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+    .pet-info h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+      margin-bottom: 4px;
+    }
+    .pet-info p {
+      font-size: 13px;
+      color: var(--muted, #9a7b6a);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-item {
+      background: var(--background, #fff7ed);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted, #9a7b6a);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+    }
+    .stat-value small {
+      font-size: 12px;
+      font-weight: normal;
+      color: var(--muted, #9a7b6a);
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+      margin-bottom: 12px;
+    }
+    .interactions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .interaction-btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 12px;
+      background: var(--background, #fff7ed);
+      color: var(--text, #3a2a20);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .interaction-btn:hover {
+      background: var(--accent, #ffc987);
+      transform: translateY(-1px);
+    }
+    .settings-group {
+      margin-bottom: 16px;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--background, #fff7ed);
+    }
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+    .setting-label {
+      font-size: 14px;
+      color: var(--text, #3a2a20);
+    }
+    .setting-desc {
+      font-size: 12px;
+      color: var(--muted, #9a7b6a);
+    }
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--muted, #9a7b6a);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.active {
+      background: var(--primary, #ff8a24);
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.active::after {
+      transform: translateX(20px);
+    }
+    .size-selector {
+      display: flex;
+      gap: 8px;
+    }
+    .size-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--accent, #ffc987);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text, #3a2a20);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .size-btn.active {
+      background: var(--primary, #ff8a24);
+      border-color: var(--primary, #ff8a24);
+      color: white;
+    }
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: var(--background, #fff7ed);
+      border-radius: 50%;
+      color: var(--muted, #9a7b6a);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .close-btn:hover {
+      background: var(--accent, #ffc987);
+      color: var(--text, #3a2a20);
+    }
+    .update-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 10px;
+      background: var(--primary, #ff8a24);
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .update-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 138, 36, 0.3);
+    }
+    .update-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
+    .content-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+      min-height: 0;
+    }
+    .content-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+    .content-scroll::-webkit-scrollbar-thumb {
+      background: var(--accent, #ffc987);
+      border-radius: 4px;
+    }
+    .anniversary-box {
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 6px;
+      border: 1px solid var(--border, #eee);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .anniversary-box::-webkit-scrollbar {
+      width: 6px;
+    }
+    .anniversary-box::-webkit-scrollbar-thumb {
+      background: var(--accent, #ffc987);
+      border-radius: 3px;
+    }
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: var(--background, #fff7ed);
+      border-radius: 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 0;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted, #9a7b6a);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--surface, #fff);
+      color: var(--text, #3a2a20);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+    .changelog-item {
+      padding: 10px 12px;
+      background: var(--background, #fff7ed);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .changelog-item:hover { background: #ffeedd; }
+    .changelog-item .ver-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .changelog-item .ver { font-weight: 600; color: var(--text, #3a2a20); font-size: 14px; }
+    .changelog-item .date { font-size: 12px; color: var(--muted, #9a7b6a); }
+    .changelog-item .changes {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text, #3a2a20);
+      line-height: 1.6;
+      display: none;
+    }
+    .changelog-item.expanded .changes { display: block; }
+    .changelog-item .changes ul { padding-left: 18px; }
+
+    /* 日历 */
+    .calendar {
+      background: var(--surface, #fff);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .calendar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+    }
+    .calendar-nav {
+      display: flex;
+      gap: 6px;
+    }
+    .calendar-nav button {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 8px;
+      background: var(--background, #fff7ed);
+      color: var(--text, #3a2a20);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .calendar-nav button:hover { background: #ffeedd; }
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .calendar-weekdays div {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted, #9a7b6a);
+      padding: 4px 0;
+    }
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text, #3a2a20);
+      cursor: default;
+      position: relative;
+    }
+    .cal-day.other-month { opacity: 0.25; }
+    .cal-day.today {
+      background: var(--primary, #ff8a24);
+      color: #fff;
+      font-weight: 600;
+    }
+    .cal-day.has-event {
+      background: var(--background, #fff7ed);
+      cursor: pointer;
+      border: 1.5px solid var(--accent, #ffc987);
+    }
+    .cal-day.has-event:hover { background: #ffeedd; }
+    .cal-day .event-label {
+      font-size: 9px;
+      color: var(--primary, #ff8a24);
+      font-weight: 600;
+      margin-top: 2px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 2px;
+    }
+    .cal-day.today .event-label { color: #fff; }
+    .calendar-event-detail {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--background, #fff7ed);
+      border-radius: 12px;
+      display: none;
+    }
+    .calendar-event-detail.show { display: block; }
+    .calendar-event-detail .ev-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text, #3a2a20);
+      margin-bottom: 4px;
+    }
+    .calendar-event-detail .ev-desc {
+      font-size: 12px;
+      color: var(--muted, #9a7b6a);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .calendar-event-detail button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary, #ff8a24);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="dashboard">
+    <div class="card" style="position: relative; flex: 1; display: flex; flex-direction: column;">
+      <button class="close-btn" id="close-btn">×</button>
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="home">🏠 主页</button>
+        <button class="tab-btn" data-tab="todo">📝 待办</button>
+        <button class="tab-btn" data-tab="festival">🎂 节日</button>
+        <button class="tab-btn" data-tab="changelog">📋 更新日志</button>
+      </div>
+      <div class="content-scroll">
+        <!-- 主页 tab -->
+        <div class="tab-page active" id="tab-home">
+        <div class="header">
+          <div class="pet-avatar">🐱</div>
+          <div class="pet-info">
+            <h2 id="pet-name">桌宠</h2>
+            <p id="pet-personality">正在加载角色信息</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label">💕 好感度</div>
+            <div class="stat-value" id="affection">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">😊 心情</div>
+            <div class="stat-value" id="mood">80</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">🎯 今日互动</div>
+            <div class="stat-value" id="today-interactions">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">⏰ 陪伴时长</div>
+            <div class="stat-value" id="companion-minutes">0<small>分钟</small></div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="section-title">✨ 互动</div>
+          <div class="interactions" id="interactions-list">
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="section-title">⚙️ 设置</div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">置顶显示</div>
+              <div class="setting-desc">桌宠窗口始终在最前面</div>
+            </div>
+            <div class="toggle active" id="toggle-always-on-top"></div>
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">鼠标穿透</div>
+              <div class="setting-desc">点击穿透到后面的窗口</div>
+            </div>
+            <div class="toggle" id="toggle-click-through"></div>
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">桌宠大小</div>
+              <div class="setting-desc">调整桌宠显示大小</div>
+            </div>
+            <div class="size-selector" id="size-selector">
+              <button class="size-btn" data-scale="0.65">小</button>
+              <button class="size-btn active" data-scale="0.8">标准</button>
+              <button class="size-btn" data-scale="1">大</button>
+              <button class="size-btn" data-scale="1.2">超大</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="section-title">🤖 Claude 技能</div>
+          <div class="setting-desc" style="margin-bottom: 10px;">
+            在 Claude Code 里说「小猫咪 帮我…」即可把任务/会议直接送到桌宠提醒。
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">技能状态</div>
+              <div class="setting-desc" id="skill-status">检查中…</div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div style="flex: 1;">
+              <div class="setting-label">触发关键字</div>
+              <div class="setting-desc" style="margin-top: 6px;">
+                <button class="update-btn" id="skill-keyword-btn" style="white-space: normal; text-align: left;">小猫咪 帮我 加个会议，今天下午 3 点</button>
+              </div>
+              <div class="setting-desc" id="skill-copied" style="display: none; color: var(--primary, #ff8a24); margin-top: 6px;">
+                已复制示例，粘贴到 Claude Code 发送即可触发
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">安装到 Claude 全局技能目录</div>
+              <div class="setting-desc">写入 ~/.claude/skills/pet-reminder/，所有项目可用</div>
+            </div>
+            <button class="update-btn" id="skill-install-btn">安装 / 更新</button>
+          </div>
+          <div class="setting-desc" id="skill-install-status" style="margin-top: 8px; display: none;"></div>
+        </div>
+        </div>
+
+        <!-- 待办 tab -->
+        <div class="tab-page" id="tab-todo">
+        <div class="settings-group">
+          <div class="section-title">📝 待办提醒</div>
+          <div class="setting-desc" style="margin-bottom: 10px;">
+            右键桌宠 →「⏰ 添加提醒」可创建新待办。
+          </div>
+          <div id="todo-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+          <div class="setting-desc" id="todo-empty" style="text-align: center; color: var(--muted, #9a7b6a); padding: 20px 0;">
+            暂无待办
+          </div>
+        </div>
+        </div>
+
+        <!-- 节日 tab -->
+        <div class="tab-page" id="tab-festival">
+        <div class="settings-group">
+          <div class="section-title">🎂 节日日历</div>
+          <div class="calendar">
+            <div class="calendar-header">
+              <div class="calendar-title" id="cal-title">2026年1月</div>
+              <div class="calendar-nav">
+                <button id="cal-prev">‹</button>
+                <button id="cal-next">›</button>
+              </div>
+            </div>
+            <div class="calendar-weekdays">
+              <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+            </div>
+            <div class="calendar-days" id="cal-days"></div>
+          </div>
+          <div class="calendar-event-detail" id="cal-event-detail">
+            <div class="ev-title" id="ev-title"></div>
+            <div class="ev-desc" id="ev-desc"></div>
+            <button id="ev-preview">预览效果</button>
+          </div>
+          <div id="anniversary-status-row" style="margin-top: 10px; display: none; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--background, #fff7ed); border-radius: 10px;">
+            <div class="setting-desc" id="anniversary-status" style="margin-top: 0;"></div>
+            <button id="anniversary-reset" style="padding: 6px 14px; border: none; border-radius: 8px; background: var(--primary, #ff8a24); color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap;">恢复正常</button>
+          </div>
+        </div>
+        </div>
+
+        <!-- 更新日志 tab -->
+        <div class="tab-page" id="tab-changelog">
+        <div class="settings-group">
+          <div class="section-title">📋 版本更新</div>
+          <div id="changelog-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+        <div class="settings-group">
+          <div class="section-title">🔄 更新检查</div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">当前版本</div>
+              <div class="setting-desc" id="update-version">检查中…</div>
+            </div>
+            <button class="update-btn" id="update-btn">检查更新</button>
+          </div>
+          <div class="setting-desc" id="update-status" style="margin-top: 8px; display: none;"></div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<script type="module" src="/frontend/src/api.ts"></script>
+<script type="module" src="/frontend/src/renderer/dashboard/index.ts"></script>
+</body>
+</html>

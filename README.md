@@ -26,22 +26,22 @@
 ## 运行
 
 ```bash
-npm ci          # 安装依赖（国内可加 ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/）
-npm run dev     # 源码开发预览
+cd frontend && npm ci && npm run build   # 构建前端到 out/
+cargo tauri dev                         # 源码开发预览（Rust 主进程 + 静态前端）
 ```
 
 ## 打包
 
 ```bash
-npm run make:mac    # macOS: DMG + ZIP（需在 macOS 上）
-npm run make:win    # Windows: EXE + ZIP（需在 Windows 上）
+cargo tauri build --bundles dmg,app   # macOS: DMG + APP（需在 macOS 上）
+cargo tauri build --bundles nsis      # Windows: NSIS Setup EXE（需在 Windows 上）
 ```
 
 GitHub Actions 已配置自动构建：推送到 `main` 分支自动出双平台安装包（Artifacts）；打 `v*` tag 自动发布到 Releases。
 
 ## 技术栈
 
-- Electron + Electron Forge + Webpack + TypeScript
+- Tauri v2 + Rust（主进程/命令/托盘/本地服务）+ Vite + TypeScript（多页前端）
 - 角色素材由 Seedream 生成，Apple Vision 语义抠图处理
 
 ## 🤖 接入 Agent 任务状态（Claude Code）
@@ -150,6 +150,7 @@ python3 tools/install-claude-skill.py --uninstall --dry-run
 
 | 版本号 | 时间 | 改动内容 |
 |---|---|---|
+| 1.5.0 | 2026-11-11 | 桌面框架由 Electron 迁移到 Tauri v2（Rust 主进程 + Vite 多页前端），安装包体积与运行内存下降；三窗口、托盘/右键菜单、双宠切换、4 个互动动画、提醒调度、纪念日、agent-bridge、技能安装、历史数据迁移与系统通知等主链路在 Tauri 下复刻；素材处理 Node 脚本保留不迁；GitHub Actions 改造为 Tauri 双平台打包 |
 | 1.4.1 | 2026-11-09 | 多帧素材边缘白边优化（哈哈待机/走动/跳跃/通知等帧 + 妮妮走动帧，手动修边版）；拖拽体验优化：悬空图显示放大与待机视觉协调，松手即时回待机不再残留 |
 | 1.4.0 | 2026-11-05 | 新增「拖拽悬空」状态：拖起桌宠时切换为被提起的悬空姿态（哈哈/妮妮各 1 帧全身像新素材，脚部自然蜷缩、不显示手），放下后回到待机；修复 bury 动画第 5 帧腿部缺口（哈哈运行时素材替换为补腿修复版） |
 | 1.3.1 | 2026-11-03 | 修复打包版面板「安装技能」失败：技能安装器与资源（install-claude-skill.py / add-reminder.py / skills）经 extraResource 随包输出为真实文件，打包环境改用 resourcesPath 定位，不再指向不可访问的 asar 内路径 |

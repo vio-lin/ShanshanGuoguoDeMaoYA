@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "布偶猫桌宠",
+  "version": "1.5.0",
+  "identifier": "com.doubao.ragdollpet",
+  "build": {
+    "frontendDist": "../out"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "pet",
+        "title": "桌宠",
+        "url": "frontend/pet.html",
+        "width": 176,
+        "height": 176,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "fullscreen": false,
+        "center": false,
+        "x": 200,
+        "y": 200
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app", "nsis"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}
