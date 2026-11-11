@@ -4,10 +4,9 @@
 
 ## 一、发版阻塞（CI / Release）
 
-- [ ] 复验 CI 双平台构建：`14f3bdf` 推送 main 后，确认 macOS（dmg+app）、Windows（nsis）两个 build job 全部绿色。
-  - 本地已用干净 `npm ci` + `tsc --noEmit` + `vite build` 复现通过；Windows nsis 线上首跑，重点看 WebView2、链接器、NSIS 段。
-- [ ] tag 与提交对齐：历史 `v1.5.0` 仍指向首次失败提交 `9599ec4`，保持不动；v1.5.1 走新 tag，指向本轮新提交。两个 build job 通过后推送 tag，`release` job 自动生成 v1.5.1 Release。
-- [ ] 确认 Release 产物：macOS app/dmg、Windows exe 三个附件随 Release 自动上传；`release` job 依赖两个 build job 同时成功，任一失败则不生成 Release。
+- [x] ~~复验 CI 双平台构建~~：线上 #20（main，7b4ebed）11m19s、#21（tag v1.5.1，7b4ebed）8m55s 均 completed successfully，macOS（dmg+app）、Windows（nsis）build job 绿色。
+- [x] ~~tag 与提交对齐~~：历史 `v1.5.0` 仍指向首次失败提交 `9599ec4` 保持不动；新 tag `v1.5.1` 指向 `7b4ebed`，release job 已生成 v1.5.1 Release。
+- [ ] 核对 Release 附件：网页 Release 页可见 Assets 7（对应 macOS app/dmg、Windows exe）；受匿名 GitHub API 限流，附件文件名未逐条列出，待登录 gh 或网页下载后复核。
 - [ ] （可选）给 release job 加兜底：build 失败时也在 Release 页生成「构建未完成」条目（不带附件），避免 tag 推了却找不到 Release。
 - [ ] （可选）配置 `Swatinem/rust-cache@v2` 缓存 Rust `target/`，缩短后续 CI 编译时间（首次为空，收益从第二次起）。
 
