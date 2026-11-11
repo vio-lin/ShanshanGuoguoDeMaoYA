@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "noUncheckedIndexedAccess": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["src/shared/*"]
