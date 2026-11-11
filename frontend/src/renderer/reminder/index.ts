@@ -29,6 +29,13 @@ const timeInput = document.getElementById('reminder-time') as HTMLInputElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
 
+// 标题行按下时拖动整个提醒窗（按钮/输入框不触发）
+const dragTitle = document.querySelector<HTMLElement>('.title');
+dragTitle?.addEventListener('mousedown', (e) => {
+  if ((e.target as HTMLElement).closest('button, input, select, a, textarea')) return;
+  void window.petAPI?.window.beginDrag();
+});
+
 // 设置默认时间为当前时间
 function setDefaultTime(): void {
   const now = new Date();

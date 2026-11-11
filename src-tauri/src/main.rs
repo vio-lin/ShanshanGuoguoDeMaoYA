@@ -1,4 +1,9 @@
-use axum::{extract::State as AxumState, routing::post, Json, Router};
+use axum::{
+    extract::{Path as AxumPath, State as AxumState},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
@@ -344,13 +349,58 @@ fn reminders_save(
 }
 
 #[tauri::command]
-fn reminders_remove(app: tauri::AppHandle, shared: State<'_, SharedState>, id: String) -> bool {
+fn reminders_remove(app: tauri::AppHandle, id: String) -> bool {
+    let shared = app.state::<SharedState>();
     let mut list = reminders_list(app.clone());
     let before = list.len();
     list.retain(|r| r.id != id);
     persist_reminders(&app, &list);
     unschedule_reminder(&shared, &id);
     list.len() < before
+}
+
+#[tauri::command]
+fn reminders_get(app: tauri::AppHandle, id: String) -> Option<Reminder> {
+    reminders_list(app).into_iter().find(|r| r.id == id)
+}
+
+#[tauri::command]
+fn reminders_update(
+    app: tauri::AppHandle,
+    id: String,
+    input: serde_json::Value,
+) -> Result<Reminder, String> {
+    let shared = app.state::<SharedState>();
+    let mut list = reminders_list(app.clone());
+    let Some(index) = list.iter().position(|r| r.id == id) else {
+        return Err("提醒不存在".to_string());
+    };
+    let mut reminder = list[index].clone();
+
+    if let Some(text) = input["text"].as_str() {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            reminder.text = trimmed.to_string();
+        }
+    }
+    if let Some(due_at) = input["dueAt"].as_str() {
+        if !due_at.is_empty() {
+            reminder.due_at = due_at.to_string();
+        }
+    }
+    // leadMinutes 显式传入时才覆盖（含 null/0 清除提前量）
+    if input["leadMinutes"].is_number() || input["leadMinutes"].is_null() {
+        reminder.lead_minutes = input["leadMinutes"]
+            .as_u64()
+            .map(|v| v as u32)
+            .filter(|&m| m > 0 && m <= 1440);
+    }
+
+    list[index] = reminder.clone();
+    persist_reminders(&app, &list);
+    unschedule_reminder(&shared, &id);
+    schedule_reminder(&app, &shared, reminder.clone());
+    Ok(reminder)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1179,7 +1229,7 @@ async fn agent_task_handler(
     Json(serde_json::json!({ "ok": true }))
 }
 
-async fn reminders_handler(
+async fn reminders_create_handler(
     AxumState(app): AxumState<tauri::AppHandle>,
     Json(input): Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
@@ -1192,10 +1242,64 @@ async fn reminders_handler(
     Json(serde_json::json!({ "ok": true, "reminder": reminder }))
 }
 
+async fn reminders_list_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "ok": true, "reminders": reminders_list(app) }))
+}
+
+async fn reminders_get_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match reminders_list(app).into_iter().find(|r| r.id == id) {
+        Some(reminder) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "reminder": reminder }))),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "提醒不存在" })),
+        ),
+    }
+}
+
+async fn reminders_update_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+    Json(input): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match reminders_update(app, id, input) {
+        Ok(reminder) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "reminder": reminder }))),
+        Err(error) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "ok": false, "error": error }))),
+    }
+}
+
+async fn reminders_delete_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let removed = reminders_remove(app, id);
+    if removed {
+        (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "提醒不存在" })),
+        )
+    }
+}
+
 async fn start_agent_bridge(app: tauri::AppHandle) {
     let router = Router::new()
         .route("/agent-task", post(agent_task_handler))
-        .route("/reminders", post(reminders_handler))
+        .route(
+            "/reminders",
+            get(reminders_list_handler).post(reminders_create_handler),
+        )
+        .route(
+            "/reminders/{id}",
+            get(reminders_get_handler)
+                .put(reminders_update_handler)
+                .delete(reminders_delete_handler),
+        )
         .with_state(app);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 46231));
@@ -1408,7 +1512,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_settings, update_settings,
             pets_list, pets_activate,
-            reminders_list, reminders_save, reminders_remove,
+            reminders_list, reminders_save, reminders_remove, reminders_get, reminders_update,
             interactions_stats, interactions_trigger,
             show_pet_context_menu,
             window_show_reminder, window_show_dashboard,

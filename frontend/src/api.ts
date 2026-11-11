@@ -60,7 +60,9 @@ export const petAPI: PetAPI = {
   },
   reminders: {
     list: () => invoke<Reminder[]>('reminders_list'),
+    get: (id) => invoke<Reminder | null>('reminders_get', { id }),
     save: (input) => invoke<Reminder>('reminders_save', { input }),
+    update: (id, input) => invoke<Reminder>('reminders_update', { id, input }),
     remove: (id) => invoke<boolean>('reminders_remove', { id }),
   },
   interactions: {

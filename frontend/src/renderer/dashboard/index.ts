@@ -21,6 +21,17 @@ function applyPetIdentity(): void {
 applyPetIdentity();
 
 const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
+
+// 窗口拖动：在非交互控件区域按下时拖动整个窗口（按钮/输入框不触发）
+function bindDrag(el: HTMLElement | null): void {
+  if (!el) return;
+  el.addEventListener('mousedown', (e) => {
+    if ((e.target as HTMLElement).closest('button, input, select, a, textarea')) return;
+    void window.petAPI?.window.beginDrag();
+  });
+}
+bindDrag(document.querySelector('.tab-nav'));
+bindDrag(document.querySelector('.header'));
 const affectionEl = document.getElementById('affection') as HTMLDivElement;
 const moodEl = document.getElementById('mood') as HTMLDivElement;
 const todayInteractionsEl = document.getElementById('today-interactions') as HTMLDivElement;
@@ -411,6 +422,11 @@ function setupTabs(): void {
 
 // 版本更新日志
 const CHANGELOG = [
+  {
+    version: '1.5.1',
+    date: '2026-11',
+    changes: ['🖱️ 小屋与添加闹钟窗口支持鼠标拖动', '🔔 闹钟本地接口闭环：查询全部/单条、更新、删除，AI 可定位并变更或取消提醒', '🐛 修复 agent-bridge 启动路由 panic；同步 pet-reminder 技能脚本与文档'],
+  },
   {
     version: '1.5.0',
     date: '2026-11',

@@ -235,7 +235,9 @@ export interface PetAPI {
   };
   reminders: {
     list: () => Promise<Reminder[]>;
+    get: (id: string) => Promise<Reminder | null>;
     save: (input: { text: string; dueAt: string; leadMinutes?: number }) => Promise<Reminder>;
+    update: (id: string, input: Partial<{ text: string; dueAt: string; leadMinutes?: number | null }>) => Promise<Reminder>;
     remove: (id: string) => Promise<boolean>;
   };
   interactions: {
