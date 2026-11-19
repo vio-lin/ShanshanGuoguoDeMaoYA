@@ -7,6 +7,7 @@
 - [x] ~~复验 CI 双平台构建~~：线上 #20（main，7b4ebed）11m19s、#21（tag v1.5.1，7b4ebed）8m55s 均 completed successfully，macOS（dmg+app）、Windows（nsis）build job 绿色。
 - [x] ~~tag 与提交对齐~~：历史 `v1.5.0` 仍指向首次失败提交 `9599ec4` 保持不动；新 tag `v1.5.1` 指向 `7b4ebed`，release job 已生成 v1.5.1 Release。
 - [x] ~~核对 Release 附件构成~~：CI release job 的 files glob 已收窄为 `macos/*.dmg`、`windows/*.exe`，下次发布不再把 `.app` 内部的 `icon.icns` / `Info.plist` / 二进制拆成冗余附件；完整 `.app` 已打进 dmg。
+- [x] ~~v1.6.0 发版~~：提交 `74b20a8` + annotated tag `v1.6.0` 已推送；Release 页正文取自仓库 `RELEASE_NOTES.md`（CI release job 增加 checkout + `body_path`，移除 `generate_release_notes`），附件实测仅 `布偶猫桌宠_1.6.0_aarch64.dmg`、`布偶猫桌宠_1.6.0_x64-setup.exe` 两项，无 `.app` 内部冗余。
 - [ ] （可选）给 release job 加兜底：build 失败时也在 Release 页生成「构建未完成」条目（不带附件），避免 tag 推了却找不到 Release。
 - [ ] （可选）配置 `Swatinem/rust-cache@v2` 缓存 Rust `target/`，缩短后续 CI 编译时间（首次为空，收益从第二次起）。
 
@@ -17,7 +18,7 @@
 - [ ] **全局打字监听**：设置项 `typingReaction` 与 `typing-status` 通道保留，后端不发事件，属空壳；原版 typing-listener 也无真实钩子。是否需要真实全局键盘监听待决策（需明确授权，且只产生活动脉冲、不读存键值）。
 - [ ] **E2E 探针 `__petE2E`**：契约类型已在 `contracts.ts`，未在运行时暴露给测试。
 - [ ] **Dashboard 标题**：无边框原生标题固定「哈哈的小屋」，前端 `document.title` 随宠覆盖；未做原生标题随宠切换。
-- [ ] **更新流程线上实测**：本地走「已是最新」分支；「发现新版本」分支仅由版本比较单测覆盖，需发更高版本后线上验证。API 403/429/网络失败已降级 `releases.atom` feed 解析（首条 entry 取版本号与 tag 链接，无下载地址/更新说明），线上限流场景待更高版本发布后复验。
+- [ ] **更新流程线上实测**：本地走「已是最新」分支；「发现新版本」分支仅由版本比较单测覆盖。v1.6.0 上线后，1.5.1 客户端应能检出 1.6.0，可据此复验「发现新版本」分支与 API 限流时降级 `releases.atom` 的链路。
 - [ ] **面板待办编辑入口**：闹钟 HTTP 已闭环（`GET /reminders` 列表、`GET /reminders/:id`、`PUT /reminders/:id`、`DELETE /reminders/:id`），AI 可经本地接口查询/更新/删除；dashboard 待办 tab 面板目前仅「删除」，未做前端回填编辑（复用 reminder 弹窗预填）。
 
 ## 三、待用户拍板的决策项
