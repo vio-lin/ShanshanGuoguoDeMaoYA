@@ -8,6 +8,7 @@
 - [x] ~~tag 与提交对齐~~：历史 `v1.5.0` 仍指向首次失败提交 `9599ec4` 保持不动；新 tag `v1.5.1` 指向 `7b4ebed`，release job 已生成 v1.5.1 Release。
 - [x] ~~核对 Release 附件构成~~：CI release job 的 files glob 已收窄为 `macos/*.dmg`、`windows/*.exe`，下次发布不再把 `.app` 内部的 `icon.icns` / `Info.plist` / 二进制拆成冗余附件；完整 `.app` 已打进 dmg。
 - [x] ~~v1.6.0 发版~~：提交 `74b20a8` + annotated tag `v1.6.0` 已推送；Release 页正文取自仓库 `RELEASE_NOTES.md`（CI release job 增加 checkout + `body_path`，移除 `generate_release_notes`），附件实测仅 `布偶猫桌宠_1.6.0_aarch64.dmg`、`布偶猫桌宠_1.6.0_x64-setup.exe` 两项，无 `.app` 内部冗余。
+- [x] ~~Release 附件 glob 嵌套导致 dmg 漏发~~：`upload-artifact@v4` 对 `macos/*.app` 与 `dmg/*.dmg` 两个父目录按最小公共父目录（bundle/）保留层级，artifact 内是 `macos/…app` + `dmg/…dmg`；下载到 `macos/` 后 dmg 落在 `macos/dmg/`，收窄后的 `macos/*.dmg` 静默失配（glob 不匹配不报错），首版 v1.6.0 Release 只有 exe。改为 release 前 `find` 递归归位到 `dist/` 并对 dmg/exe 各做硬校验（缺失直接失败），重建 tag 后 dmg 21.4MB、exe 17.4MB 均上传成功。**不要再把 release files 收缩成单层 glob。**
 - [ ] （可选）给 release job 加兜底：build 失败时也在 Release 页生成「构建未完成」条目（不带附件），避免 tag 推了却找不到 Release。
 - [ ] （可选）配置 `Swatinem/rust-cache@v2` 缓存 Rust `target/`，缩短后续 CI 编译时间（首次为空，收益从第二次起）。
 
