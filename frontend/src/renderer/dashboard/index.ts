@@ -22,16 +22,15 @@ applyPetIdentity();
 
 const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 
-// 窗口拖动：在非交互控件区域按下时拖动整个窗口（按钮/输入框不触发）
+// 窗口拖动：在非交互控件区域按下时拖动整个窗口（按钮/输入框/开关/选择器不触发）
 function bindDrag(el: HTMLElement | null): void {
   if (!el) return;
   el.addEventListener('mousedown', (e) => {
-    if ((e.target as HTMLElement).closest('button, input, select, a, textarea')) return;
+    if ((e.target as HTMLElement).closest('button, input, select, a, textarea, .toggle, .size-selector')) return;
     void window.petAPI?.window.beginDrag();
   });
 }
-bindDrag(document.querySelector('.tab-nav'));
-bindDrag(document.querySelector('.header'));
+bindDrag(document.querySelector('.card'));
 const affectionEl = document.getElementById('affection') as HTMLDivElement;
 const moodEl = document.getElementById('mood') as HTMLDivElement;
 const todayInteractionsEl = document.getElementById('today-interactions') as HTMLDivElement;
@@ -39,6 +38,7 @@ const companionMinutesEl = document.getElementById('companion-minutes') as HTMLD
 const interactionsList = document.getElementById('interactions-list') as HTMLDivElement;
 const toggleAlwaysOnTop = document.getElementById('toggle-always-on-top') as HTMLDivElement;
 const toggleClickThrough = document.getElementById('toggle-click-through') as HTMLDivElement;
+const toggleAutostart = document.getElementById('toggle-autostart') as HTMLDivElement;
 const sizeSelector = document.getElementById('size-selector') as HTMLDivElement;
 
 let currentSettings: Settings | null = null;
@@ -90,6 +90,18 @@ async function loadSettings(): Promise<void> {
       toggleClickThrough.classList.add('active');
     } else {
       toggleClickThrough.classList.remove('active');
+    }
+
+    // 开机自启状态（系统侧真值，独立于 settings.json）
+    try {
+      const autostart = await window.petAPI?.autostart.get();
+      if (autostart) {
+        toggleAutostart.classList.add('active');
+      } else {
+        toggleAutostart.classList.remove('active');
+      }
+    } catch (error) {
+      console.error('Failed to read autostart state:', error);
     }
 
     // 更新大小选择
@@ -163,6 +175,21 @@ toggleClickThrough.addEventListener('click', async () => {
     }
   } catch (error) {
     console.error('Failed to update setting:', error);
+  }
+});
+
+// 开机自启开关
+toggleAutostart.addEventListener('click', async () => {
+  const enabled = !toggleAutostart.classList.contains('active');
+  try {
+    const actual = await window.petAPI?.autostart.set(enabled);
+    if (actual) {
+      toggleAutostart.classList.add('active');
+    } else {
+      toggleAutostart.classList.remove('active');
+    }
+  } catch (error) {
+    console.error('Failed to update autostart:', error);
   }
 });
 
@@ -423,6 +450,11 @@ function setupTabs(): void {
 // 版本更新日志
 const CHANGELOG = [
   {
+    version: '1.6.0',
+    date: '2026-11',
+    changes: ['🔁 重复提醒支持每小时 / 每天 / 工作日 / 每周，到点自动推进下一次', '😴 提醒弹窗新增「稍后提醒」5 / 10 / 30 分钟，重复提醒不改原节奏', '⚡ 右键菜单新增快捷提醒：每小时喝水、起来活动、每天 22:30 休息', '📍 记住桌宠窗口位置，重启回到原处（多屏拔除时自动回退）', '🚀 设置区新增「开机自启」开关，读取系统真实状态', '🎂 节日 tab 更名「纪念日」；待办新增「清除已过期」'],
+  },
+  {
     version: '1.5.1',
     date: '2026-11',
     changes: ['🖱️ 小屋与添加闹钟窗口支持鼠标拖动', '🔔 闹钟本地接口闭环：查询全部/单条、更新、删除，AI 可定位并变更或取消提醒', '🐛 修复 agent-bridge 启动路由 panic；同步 pet-reminder 技能脚本与文档'],
@@ -509,10 +541,14 @@ function renderChangelog(): void {
 async function loadTodos(): Promise<void> {
   const listEl = document.getElementById('todo-list');
   const emptyEl = document.getElementById('todo-empty');
+  const clearBtn = document.getElementById('todo-clear-expired') as HTMLButtonElement | null;
   if (!listEl || !emptyEl) return;
   const refresh = async (): Promise<void> => {
     const reminders = await window.petAPI?.reminders.list();
     listEl.replaceChildren();
+    const now = new Date();
+    const expired = (reminders ?? []).filter((r) => !r.repeat && new Date(r.dueAt) < now);
+    if (clearBtn) clearBtn.disabled = expired.length === 0;
     if (!reminders || reminders.length === 0) {
       emptyEl.style.display = 'block';
       return;
@@ -545,14 +581,38 @@ async function loadTodos(): Promise<void> {
       time.className = 'date';
       time.style.marginTop = '4px';
       const due = new Date(r.dueAt);
-      const now = new Date();
       const overdue = due < now;
       const leadTxt = typeof r.leadMinutes === 'number' && r.leadMinutes > 0 ? ` · 提前 ${r.leadMinutes} 分钟` : '';
-      time.textContent = `${overdue ? '⚠️ 已过期 · ' : '⏰ '}${due.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${leadTxt}`;
+      const repeatTxt =
+        r.repeat === 'hourly'
+          ? ' · 每小时'
+          : r.repeat === 'daily'
+            ? ' · 每天'
+            : r.repeat === 'weekdays'
+              ? ' · 工作日'
+              : r.repeat === 'weekly'
+                ? ' · 每周'
+                : '';
+      const dueText = `${due.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${leadTxt}${repeatTxt}`;
+      time.textContent = `${overdue && !r.repeat ? '⚠️ 已过期 · ' : '⏰ '}${dueText}`;
       row.append(verRow, time);
       listEl.appendChild(row);
     }
   };
+  clearBtn?.addEventListener('click', async () => {
+    const reminders = await window.petAPI?.reminders.list();
+    const now = new Date();
+    const expired = (reminders ?? []).filter((r) => !r.repeat && new Date(r.dueAt) < now);
+    if (clearBtn) clearBtn.disabled = true;
+    for (const r of expired) {
+      try {
+        await window.petAPI?.reminders.remove(r.id);
+      } catch (err) {
+        console.error('Failed to remove reminder:', err);
+      }
+    }
+    await refresh();
+  });
   await refresh();
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "ragdoll-pet"
-version = "1.5.1"
+version = "1.6.0"
 description = "布偶猫桌宠"
 edition = "2021"
 
@@ -17,6 +17,7 @@ axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.13", features = ["blocking", "rustls", "json"] }
 tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

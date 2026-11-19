@@ -98,10 +98,19 @@ def parse_at(raw: str) -> dt.datetime:
     )
 
 
+REPEAT_LABELS = {
+    "hourly": "每小时",
+    "daily": "每天",
+    "weekdays": "工作日",
+    "weekly": "每周",
+}
+
+
 def fmt_reminder(r: dict) -> str:
     lead = r.get("leadMinutes")
     lead_txt = f"，提前 {lead} 分钟" if lead else ""
-    return f"[{r.get('id', '')}] {r.get('text', '')} @ {r.get('dueAt', '')}{lead_txt}"
+    repeat_txt = f"，{REPEAT_LABELS[r['repeat']]}" if r.get("repeat") in REPEAT_LABELS else ""
+    return f"[{r.get('id', '')}] {r.get('text', '')} @ {r.get('dueAt', '')}{lead_txt}{repeat_txt}"
 
 
 def main() -> int:
@@ -109,6 +118,12 @@ def main() -> int:
     parser.add_argument("--text", help="提醒内容（新增/更新用）")
     parser.add_argument("--at", help="时间：今天 15:00 / 明天 09:30 / 15:00 / ISO")
     parser.add_argument("--lead", type=int, default=None, help="提前提醒分钟数（0=到点提醒；--lead 5 = 提前 5 分钟）")
+    parser.add_argument(
+        "--repeat",
+        choices=["none", "hourly", "daily", "weekdays", "weekly"],
+        default=None,
+        help="重复规则：none=不重复 / hourly=每小时 / daily=每天 / weekdays=工作日 / weekly=每周",
+    )
     parser.add_argument("--id", help="已有提醒 ID（查询/更新/删除用）")
     parser.add_argument("--list", action="store_true", help="列出全部提醒")
     parser.add_argument("--update", action="store_true", help="按 --id 更新提醒（配合 --text/--at/--lead）")
@@ -161,8 +176,10 @@ def main() -> int:
                     return 2
             if args.lead is not None:
                 payload["leadMinutes"] = args.lead
+            if args.repeat is not None:
+                payload["repeat"] = None if args.repeat == "none" else args.repeat
             if not payload:
-                print("错误：--update 至少需要提供 --text / --at / --lead 之一", file=sys.stderr)
+                print("错误：--update 至少需要提供 --text / --at / --lead / --repeat 之一", file=sys.stderr)
                 return 2
             status, data = request("PUT", item_url, payload)
             if status != 200 or not data.get("ok"):
@@ -193,12 +210,15 @@ def main() -> int:
     payload = {"text": args.text.strip(), "dueAt": due.isoformat()}
     if args.lead:
         payload["leadMinutes"] = args.lead
+    if args.repeat and args.repeat != "none":
+        payload["repeat"] = args.repeat
     status, data = request("POST", url, payload)
     if status != 200 or not data.get("ok"):
         print(f"桌宠返回失败：{data}", file=sys.stderr)
         return 1
     lead_txt = f"，提前 {args.lead} 分钟" if args.lead else ""
-    print(f"已添加提醒：{args.text.strip()} @ {due.isoformat()}{lead_txt}（{url}）")
+    repeat_txt = f"，{REPEAT_LABELS[args.repeat]}" if args.repeat and args.repeat != "none" else ""
+    print(f"已添加提醒：{args.text.strip()} @ {due.isoformat()}{lead_txt}{repeat_txt}（{url}）")
     return 0
 
 

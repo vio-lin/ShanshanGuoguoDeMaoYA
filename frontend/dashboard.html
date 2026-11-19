@@ -430,7 +430,7 @@
       <div class="tab-nav">
         <button class="tab-btn active" data-tab="home">🏠 主页</button>
         <button class="tab-btn" data-tab="todo">📝 待办</button>
-        <button class="tab-btn" data-tab="festival">🎂 节日</button>
+        <button class="tab-btn" data-tab="festival">🎂 纪念日</button>
         <button class="tab-btn" data-tab="changelog">📋 更新日志</button>
       </div>
       <div class="content-scroll">
@@ -487,6 +487,13 @@
           </div>
           <div class="setting-item">
             <div>
+              <div class="setting-label">开机自启</div>
+              <div class="setting-desc">登录系统后自动唤起桌宠</div>
+            </div>
+            <div class="toggle" id="toggle-autostart"></div>
+          </div>
+          <div class="setting-item">
+            <div>
               <div class="setting-label">桌宠大小</div>
               <div class="setting-desc">调整桌宠显示大小</div>
             </div>
@@ -535,7 +542,10 @@
         <!-- 待办 tab -->
         <div class="tab-page" id="tab-todo">
         <div class="settings-group">
-          <div class="section-title">📝 待办提醒</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="section-title" style="margin-bottom: 0;">📝 待办提醒</div>
+            <button class="update-btn" id="todo-clear-expired" style="padding: 6px 12px; font-size: 12px;" disabled>🗑 清除已过期</button>
+          </div>
           <div class="setting-desc" style="margin-bottom: 10px;">
             右键桌宠 →「⏰ 添加提醒」可创建新待办。
           </div>
@@ -546,10 +556,10 @@
         </div>
         </div>
 
-        <!-- 节日 tab -->
+        <!-- 纪念日 tab -->
         <div class="tab-page" id="tab-festival">
         <div class="settings-group">
-          <div class="section-title">🎂 节日日历</div>
+          <div class="section-title">🎂 纪念日日历</div>
           <div class="calendar">
             <div class="calendar-header">
               <div class="calendar-title" id="cal-title">2026年1月</div>

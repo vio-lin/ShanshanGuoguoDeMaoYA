@@ -19,20 +19,22 @@ description: 当用户说「小猫咪 帮我」或以自然语言要求添加、
   "text": "提醒内容（最长 500 字）",
   "dueAt": "ISO 8601 时间，如 2026-11-03T15:00:00+08:00",
   "createdAt": "创建时间（系统生成）",
-  "leadMinutes": 5
+  "leadMinutes": 5,
+  "repeat": "daily"
 }
 ```
 
 - `leadMinutes`：可选，提前提醒分钟数（0~1440）。缺省或 0 = 到点提醒；如 `5` = 在 dueAt 前 5 分钟提醒。用户说「提前提醒/提前 X 分钟」时使用。
+- `repeat`：可选，重复规则 `hourly`（每小时）/ `daily`（每天）/ `weekdays`（工作日）/ `weekly`（每周）；缺省 = 一次性。到点触发后桌宠会自动把 `dueAt` 推进到下一次。用户说「每天」「每周」「工作日」「每小时」时使用。
 
 ### 接口一览
 
 | 方法 | 路径 | 用途 | body |
 | --- | --- | --- | --- |
-| `POST` | `/reminders` | 新增提醒 | `{text, dueAt, leadMinutes?}` |
+| `POST` | `/reminders` | 新增提醒 | `{text, dueAt, leadMinutes?, repeat?}` |
 | `GET` | `/reminders` | 查询全部提醒 | 无 |
 | `GET` | `/reminders/:id` | 查询单条提醒 | 无 |
-| `PUT` | `/reminders/:id` | 更新提醒（部分字段，只传要改的） | `{text?, dueAt?, leadMinutes?}` |
+| `PUT` | `/reminders/:id` | 更新提醒（部分字段，只传要改的） | `{text?, dueAt?, leadMinutes?, repeat?}` |
 | `DELETE` | `/reminders/:id` | 删除提醒 | 无 |
 
 - 新增 / 更新成功：`200 {"ok": true, "reminder": {...}}`
@@ -50,28 +52,29 @@ description: 当用户说「小猫咪 帮我」或以自然语言要求添加、
    - 纯「15:00」→ 今天 15:00
    - 用户给了具体日期时间 → 直接使用
 3. 用户明确要求「提前 N 分钟」时，把 N 填入 `leadMinutes`。
-4. 优先调用技能自带脚本（自动完成换算与请求）：
+4. 用户说出「每天 / 每周 / 工作日 / 每小时」时，把对应值填入 `repeat`；没提就不传。
+5. 优先调用技能自带脚本（自动完成换算与请求）：
 
    ```bash
    # 新增
-   python3 scripts/add-reminder.py --text "<提醒内容>" --at "<时间原文，如 今天 15:00>" [--lead 5]
+   python3 scripts/add-reminder.py --text "<提醒内容>" --at "<时间原文，如 今天 15:00>" [--lead 5] [--repeat daily]
    # 查询全部 / 单条
    python3 scripts/add-reminder.py --list
    python3 scripts/add-reminder.py --id <提醒ID>
    # 更新（只传要改的字段）
-   python3 scripts/add-reminder.py --id <提醒ID> --update --text "<新内容>" --at "明天 10:00" [--lead 5]
+   python3 scripts/add-reminder.py --id <提醒ID> --update --text "<新内容>" --at "明天 10:00" [--lead 5] [--repeat weekdays]
    # 删除
    python3 scripts/add-reminder.py --id <提醒ID> --delete
    ```
 
-   脚本 `--at` 支持：`今天 HH:MM` / `明天 HH:MM` / `HH:MM` / ISO 时间（如 `2026-11-05T18:00:00+08:00`）；`--lead` 为提前分钟数（缺省 0 = 到点提醒）。
-5. 若脚本不可用，用等价 curl 直接请求：
+   脚本 `--at` 支持：`今天 HH:MM` / `明天 HH:MM` / `HH:MM` / ISO 时间（如 `2026-11-05T18:00:00+08:00`）；`--lead` 为提前分钟数（缺省 0 = 到点提醒）；`--repeat` 为重复规则，传 `none` 可取消重复。
+6. 若脚本不可用，用等价 curl 直接请求：
 
    ```bash
    # 新增
    curl -X POST http://127.0.0.1:46231/reminders \
      -H 'Content-Type: application/json' \
-     -d '{"text":"<提醒内容>","dueAt":"<ISO 时间>","leadMinutes":5}'
+     -d '{"text":"<提醒内容>","dueAt":"<ISO 时间>","leadMinutes":5,"repeat":"daily"}'
    # 查询全部
    curl http://127.0.0.1:46231/reminders
    # 更新
@@ -88,5 +91,5 @@ description: 当用户说「小猫咪 帮我」或以自然语言要求添加、
 
 - 时间无法解析：说明支持格式（今天/明天 HH:MM、HH:MM、ISO），请用户确认时间后重试。
 - 请求失败（连接被拒）：提示「桌宠没有在运行（`npm run dev`）或端口不是 46231」，不要编造成功。
-- 返回 400：按提示修正 text（非空、≤500 字）、dueAt（可解析为时间）或 leadMinutes（0~1440 整数）后重试一次。
+- 返回 400：按提示修正 text（非空、≤500 字）、dueAt（可解析为时间）、leadMinutes（0~1440 整数）或 repeat（hourly/daily/weekdays/weekly）后重试一次。
 - 返回 404：说明目标提醒不存在；可先 `GET /reminders` 列出当前提醒，确认 ID 或内容后再操作。

@@ -1,12 +1,12 @@
 # TODO / 待办清单
 
-> 维护说明：本文件跟踪 ragdoll-pet（Tauri v2 迁移后）尚未完成、待验证或待拍板的事项。完成一项勾掉一项；新增待办按对应分组追加。最后更新：2026-11-11。
+> 维护说明：本文件跟踪 ragdoll-pet（Tauri v2 迁移后）尚未完成、待验证或待拍板的事项。完成一项勾掉一项；新增待办按对应分组追加。最后更新：2026-11-19。
 
 ## 一、发版阻塞（CI / Release）
 
 - [x] ~~复验 CI 双平台构建~~：线上 #20（main，7b4ebed）11m19s、#21（tag v1.5.1，7b4ebed）8m55s 均 completed successfully，macOS（dmg+app）、Windows（nsis）build job 绿色。
 - [x] ~~tag 与提交对齐~~：历史 `v1.5.0` 仍指向首次失败提交 `9599ec4` 保持不动；新 tag `v1.5.1` 指向 `7b4ebed`，release job 已生成 v1.5.1 Release。
-- [ ] 核对 Release 附件：网页 Release 页可见 Assets 7（对应 macOS app/dmg、Windows exe）；受匿名 GitHub API 限流，附件文件名未逐条列出，待登录 gh 或网页下载后复核。
+- [x] ~~核对 Release 附件构成~~：CI release job 的 files glob 已收窄为 `macos/*.dmg`、`windows/*.exe`，下次发布不再把 `.app` 内部的 `icon.icns` / `Info.plist` / 二进制拆成冗余附件；完整 `.app` 已打进 dmg。
 - [ ] （可选）给 release job 加兜底：build 失败时也在 Release 页生成「构建未完成」条目（不带附件），避免 tag 推了却找不到 Release。
 - [ ] （可选）配置 `Swatinem/rust-cache@v2` 缓存 Rust `target/`，缩短后续 CI 编译时间（首次为空，收益从第二次起）。
 
@@ -17,7 +17,7 @@
 - [ ] **全局打字监听**：设置项 `typingReaction` 与 `typing-status` 通道保留，后端不发事件，属空壳；原版 typing-listener 也无真实钩子。是否需要真实全局键盘监听待决策（需明确授权，且只产生活动脉冲、不读存键值）。
 - [ ] **E2E 探针 `__petE2E`**：契约类型已在 `contracts.ts`，未在运行时暴露给测试。
 - [ ] **Dashboard 标题**：无边框原生标题固定「哈哈的小屋」，前端 `document.title` 随宠覆盖；未做原生标题随宠切换。
-- [ ] **更新流程线上实测**：本地 1.5.0 高于远端 v1.3.1，走「已是最新」分支；「发现新版本」分支仅由版本比较单测覆盖，需发更高版本后线上验证。`releases.atom` 降级链路未实现（API 限流/失败返回 null，前端提示检查失败）。
+- [ ] **更新流程线上实测**：本地走「已是最新」分支；「发现新版本」分支仅由版本比较单测覆盖，需发更高版本后线上验证。API 403/429/网络失败已降级 `releases.atom` feed 解析（首条 entry 取版本号与 tag 链接，无下载地址/更新说明），线上限流场景待更高版本发布后复验。
 - [ ] **面板待办编辑入口**：闹钟 HTTP 已闭环（`GET /reminders` 列表、`GET /reminders/:id`、`PUT /reminders/:id`、`DELETE /reminders/:id`），AI 可经本地接口查询/更新/删除；dashboard 待办 tab 面板目前仅「删除」，未做前端回填编辑（复用 reminder 弹窗预填）。
 
 ## 三、待用户拍板的决策项
@@ -35,7 +35,22 @@
 - [ ] 依赖裁剪：`tokio` 当前 `full`，评估改为按需 features；核对 reqwest `blocking/rustls/json` 是否可精简。
 - [x] ~~核实 CI macOS 产物架构~~：已下载 CI 产物实测，`macos/*.app` 33M（二进制 32M + 图标 912K）、`dmg/*.dmg` 21M，两者均为 arm64 单架构（Non-fat，非 universal，`--target universal-apple-darwin` 未配置）；`macos/` 与 `dmg/` 两个目录是两条 artifact glob 下载形成的两种分发形态，不是两代芯片版本。体积大头仍是嵌入的约 14M 素材 + 未 strip 的 Rust 二进制。
 
-## 五、素材待确认
+## 五、本轮已实现（代码+自动门禁通过，待真人回归）
+
+- [x] 小屋 tab「🎂 节日」改名「🎂 纪念日」，日历标题同步；内部 `data-tab="festival"` / `id="tab-festival"` 保留，历史更新日志文案不动。
+- [x] 待办面板「🗑 清除已过期」：过期口径 `!repeat && dueAt < now`，无过期项时按钮禁用。
+- [x] 桌宠窗口位置记忆：`Moved` 事件 500ms 节流落盘 `window-position.json`，退出/托盘退出前补存，启动时校验坐标落在任一显示器后再恢复。
+- [x] 重复提醒：`repeat` 支持 `hourly/daily/weekdays/weekly`；到点触发后 `advance_reminder` 推进 `dueAt`（循环跳过已过时刻，防休眠补发）；HTTP、提醒面板、`pet-reminder` 技能脚本三条入口均支持。
+- [x] 稍后提醒 Snooze：提醒窗到点态提供 5/10/30 分钟；重复提醒另建一次性副本，不改原重复节奏；一次性提醒直接改 `due_at`。
+- [x] 右键菜单「⏱ 快捷提醒」：💧 每小时喝水、🧘 每小时起来活动、🌙 每天 22:30 休息。
+- [x] 开机自启开关：`tauri-plugin-autostart 2.7.0`（macOS LaunchAgent），设置区开关读取系统侧真值并用返回值回写。
+- [x] ~~待真人回归：位置记忆~~：用 System Events 真实移动窗口到逻辑 (700,500)，`outer_position()` 落盘 physical (1400,1000)（Retina 2x），kill 重启两次均恢复到 (700,500)/(708,199)，二次恢复仍生效。副屏拔除后「坐标不可见则不恢复」的回退分支未实测。
+- [ ] **待真人回归：Snooze**——到点弹窗点 5/10/30 分钟，确认一次性提醒 `dueAt` 顺延、重复提醒新增副本且原条 `dueAt` 不变（WebView 内容不暴露给 System Events，gcu 只能匹配 `.app`、绑不上裸二进制，自动化点击无法闭环）。
+- [ ] **待真人验证：开机自启**——需在安装版 `.app` 上 enable/disable（dev 裸二进制下 LaunchAgent 路径可能不生效）。
+- [ ] **待真人回归：窗口拖动加固**——`.card` 可拖区域在 release 打包版上验证（dev 阶段 gcu 无法绑定裸二进制进程）。
+- [ ] （可选）给 agent-bridge 增加 `POST /reminders/{id}/snooze`，让 AI 侧也能执行「稍后提醒」。
+
+## 六、素材待确认
 
 - [x] ~~`src/pets/ragdoll/assets/blink/02.png` 手动修图~~：已随 v1.5.1 纳入 git 提交。
 

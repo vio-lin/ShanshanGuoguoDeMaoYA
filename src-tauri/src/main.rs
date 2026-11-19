@@ -51,6 +51,61 @@ fn settings_path(app: &tauri::AppHandle) -> PathBuf {
 /// 桌宠基础窗口边长（px，对齐 pet-spec experience.petSizing.baseWindowPx）
 const BASE_PET_WINDOW_PX: f64 = 220.0;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct SavedPosition {
+    x: i32,
+    y: i32,
+}
+
+fn position_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path().app_data_dir().unwrap().join("window-position.json")
+}
+
+/// 坐标是否落在任一显示器的可视区域内（避免外接屏拔掉后桌宠跑到屏幕外）
+fn position_visible(app: &tauri::AppHandle, x: i32, y: i32) -> bool {
+    let Ok(monitors) = app.available_monitors() else {
+        return false;
+    };
+    monitors.iter().any(|m| {
+        let p = m.position();
+        let s = m.size();
+        x >= p.x && x < p.x + s.width as i32 && y >= p.y && y < p.y + s.height as i32
+    })
+}
+
+/// 把桌宠当前坐标落盘（移动事件节流后调用）
+fn save_window_position(app: &tauri::AppHandle) {
+    let Some(pet) = app.get_webview_window("pet") else {
+        return;
+    };
+    let Ok(pos) = pet.outer_position() else {
+        return;
+    };
+    let path = position_path(app);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(content) = serde_json::to_string(&SavedPosition { x: pos.x, y: pos.y }) {
+        let _ = fs::write(&path, content);
+    }
+}
+
+/// 启动时恢复上次坐标；文件缺失或坐标不在可见屏幕内则保持默认位置
+fn restore_window_position(app: &tauri::AppHandle) {
+    let Ok(content) = fs::read_to_string(position_path(app)) else {
+        return;
+    };
+    let Ok(saved) = serde_json::from_str::<SavedPosition>(&content) else {
+        return;
+    };
+    if !position_visible(app, saved.x, saved.y) {
+        return;
+    }
+    if let Some(pet) = app.get_webview_window("pet") {
+        let _ = pet.set_position(tauri::PhysicalPosition::new(saved.x, saved.y));
+    }
+}
+
 /// 把设置应用到桌宠主窗口：置顶、鼠标穿透、按缩放调整窗口大小
 fn apply_pet_settings(app: &tauri::AppHandle, settings: &Settings) {
     let Some(pet) = app.get_webview_window("pet") else {
@@ -75,6 +130,8 @@ struct SharedState {
     session_started: Mutex<Option<Instant>>,
     /// 更新检查缓存：(时刻, 结果)，5 分钟内复用；失败不缓存
     update_cache: Mutex<Option<(Instant, Option<UpdateInfo>)>>,
+    /// 窗口位置写入节流：上次落盘时刻
+    last_position_save: Mutex<Option<Instant>>,
 }
 
 #[tauri::command]
@@ -110,6 +167,24 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Settings 
     }
     apply_pet_settings(&app, &current);
     current
+}
+
+#[tauri::command]
+fn autostart_get(app: tauri::AppHandle) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+fn autostart_set(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())?;
+    } else {
+        manager.disable().map_err(|e| e.to_string())?;
+    }
+    manager.is_enabled().map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,6 +318,19 @@ struct Reminder {
     created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     lead_minutes: Option<u32>,
+    /// 重复规则：hourly / daily / weekdays / weekly；缺省 = 一次性
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repeat: Option<String>,
+}
+
+/// 只接受白名单内的重复规则
+fn normalize_repeat(v: Option<&str>) -> Option<String> {
+    match v {
+        Some("hourly") | Some("daily") | Some("weekdays") | Some("weekly") => {
+            v.map(|s| s.to_string())
+        }
+        _ => None,
+    }
 }
 
 fn reminders_path(app: &tauri::AppHandle) -> PathBuf {
@@ -268,6 +356,7 @@ fn build_reminder(input: &serde_json::Value) -> Reminder {
         due_at: input["dueAt"].as_str().unwrap_or("").to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
         lead_minutes: lead.filter(|&m| m > 0 && m <= 1440),
+        repeat: normalize_repeat(input["repeat"].as_str()),
     }
 }
 
@@ -286,11 +375,58 @@ fn send_system_notification(app: &tauri::AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
-/// 为提醒排到点定时器：到点弹出提醒窗并触发 notify 动作
-fn schedule_reminder(app: &tauri::AppHandle, shared: &SharedState, reminder: Reminder) {
-    if let Some(old) = shared.reminder_timers.lock().unwrap().remove(&reminder.id) {
-        old.abort();
+/// 按重复规则推进到下一次；daily/weekly 单步，weekdays 跳过周末，hourly 加一小时
+fn next_occurrence(
+    current: chrono::DateTime<chrono::FixedOffset>,
+    repeat: &str,
+) -> chrono::DateTime<chrono::FixedOffset> {
+    use chrono::Datelike;
+    match repeat {
+        "hourly" => current + chrono::Duration::hours(1),
+        "weekly" => current + chrono::Duration::weeks(1),
+        "weekdays" => {
+            let mut next = current + chrono::Duration::days(1);
+            while next.weekday().number_from_monday() > 5 {
+                next += chrono::Duration::days(1);
+            }
+            next
+        }
+        _ => current + chrono::Duration::days(1),
     }
+}
+
+/// 重复提醒触发后：把 dueAt 推进到下一次（跳过已错过的周期）并重新排定时器
+fn advance_reminder(app: &tauri::AppHandle, fired: &Reminder) {
+    let Some(repeat) = fired.repeat.as_deref() else {
+        return;
+    };
+    let Ok(mut next) = chrono::DateTime::parse_from_rfc3339(&fired.due_at) else {
+        return;
+    };
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let lead_ms = fired.lead_minutes.unwrap_or(0) as i64 * 60_000;
+    // 触发时刻 = due - lead，必须晚于当前，避免休眠/关机后连环补发
+    loop {
+        next = next_occurrence(next, repeat);
+        if next.timestamp_millis() - lead_ms > now_ms {
+            break;
+        }
+    }
+
+    let mut list = reminders_list(app.clone());
+    let Some(item) = list.iter_mut().find(|r| r.id == fired.id) else {
+        return;
+    };
+    item.due_at = next.to_rfc3339();
+    let updated = item.clone();
+    persist_reminders(app, &list);
+
+    let shared = app.state::<SharedState>();
+    spawn_reminder_timer(app, shared.inner(), updated);
+}
+
+/// 创建到点定时器（不清理同 id 旧句柄，用于重复提醒自我续排）
+fn spawn_reminder_timer(app: &tauri::AppHandle, shared: &SharedState, reminder: Reminder) {
     let Ok(due) = chrono::DateTime::parse_from_rfc3339(&reminder.due_at) else {
         return;
     };
@@ -320,12 +456,21 @@ fn schedule_reminder(app: &tauri::AppHandle, shared: &SharedState, reminder: Rem
                 "feedback": reminder_task.text,
             }),
         );
+        advance_reminder(&app, &reminder_task);
     });
     shared
         .reminder_timers
         .lock()
         .unwrap()
         .insert(reminder_id, handle);
+}
+
+/// 为提醒排到点定时器：到点弹出提醒窗并触发 notify 动作
+fn schedule_reminder(app: &tauri::AppHandle, shared: &SharedState, reminder: Reminder) {
+    if let Some(old) = shared.reminder_timers.lock().unwrap().remove(&reminder.id) {
+        old.abort();
+    }
+    spawn_reminder_timer(app, shared, reminder);
 }
 
 fn unschedule_reminder(shared: &SharedState, id: &str) {
@@ -364,6 +509,43 @@ fn reminders_get(app: tauri::AppHandle, id: String) -> Option<Reminder> {
     reminders_list(app).into_iter().find(|r| r.id == id)
 }
 
+/// 稍后提醒：一次性提醒顺延 dueAt；重复提醒另建一次性副本，避免打乱原节奏
+#[tauri::command]
+fn reminders_snooze(app: tauri::AppHandle, id: String, minutes: u32) -> Result<(), String> {
+    let clamped = minutes.clamp(1, 720);
+    let when = (chrono::Local::now() + chrono::Duration::minutes(clamped as i64)).to_rfc3339();
+    let mut list = reminders_list(app.clone());
+    let Some(index) = list.iter().position(|r| r.id == id) else {
+        return Err("提醒不存在".to_string());
+    };
+
+    let shared = app.state::<SharedState>();
+    if list[index].repeat.is_some() {
+        let copy = Reminder {
+            id: uuid::Uuid::new_v4().to_string(),
+            text: list[index].text.clone(),
+            due_at: when,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            lead_minutes: None,
+            repeat: None,
+        };
+        list.push(copy.clone());
+        persist_reminders(&app, &list);
+        schedule_reminder(&app, shared.inner(), copy);
+    } else {
+        list[index].due_at = when;
+        list[index].lead_minutes = None;
+        let updated = list[index].clone();
+        persist_reminders(&app, &list);
+        schedule_reminder(&app, shared.inner(), updated);
+    }
+
+    if let Some(w) = app.get_webview_window("reminder") {
+        let _ = w.hide();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn reminders_update(
     app: tauri::AppHandle,
@@ -394,6 +576,10 @@ fn reminders_update(
             .as_u64()
             .map(|v| v as u32)
             .filter(|&m| m > 0 && m <= 1440);
+    }
+    // repeat 显式传入时才覆盖（null / "none" = 取消重复）
+    if input["repeat"].is_string() || input["repeat"].is_null() {
+        reminder.repeat = normalize_repeat(input["repeat"].as_str());
     }
 
     list[index] = reminder.clone();
@@ -761,6 +947,45 @@ fn compare_versions(a: &str, b: &str) -> i32 {
     0
 }
 
+/// 取子串：start 之后到 end 之前
+fn between<'a>(s: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let i = s.find(start)?;
+    let tail = &s[i + start.len()..];
+    let j = tail.find(end)?;
+    Some(&tail[..j])
+}
+
+/// API 限流/失败时降级 Releases Atom feed（网页域，不走 API 配额）
+fn fetch_update_from_atom(current: &str) -> Option<UpdateInfo> {
+    let url = format!("https://github.com/{UPDATE_REPO}/releases.atom");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent(format!("ShanshanGuoguoDeMaoYA/{current}"))
+        .build()
+        .ok()?;
+    let resp = client.get(&url).send().ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let xml = resp.text().ok()?;
+    let entry = between(&xml, "<entry>", "</entry>")?;
+    let title = between(entry, "<title>", "</title>").unwrap_or("");
+    let href = between(entry, "href=\"", "\"").unwrap_or("");
+    let latest = title.trim_start_matches('v').trim().to_string();
+    if latest.is_empty() || href.is_empty() {
+        return None;
+    }
+    let has_update = compare_versions(&latest, current) > 0;
+    Some(UpdateInfo {
+        current_version: current.to_string(),
+        latest_version: latest.clone(),
+        has_update,
+        release_url: href.to_string(),
+        download_url: None,
+        notes: String::new(),
+    })
+}
+
 fn fetch_from_github(current: &str) -> Option<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{UPDATE_REPO}/releases/latest");
     let client = reqwest::blocking::Client::builder()
@@ -782,9 +1007,9 @@ fn fetch_from_github(current: &str) -> Option<UpdateInfo> {
             ..Default::default()
         });
     }
-    // 限流（403/429）或其他错误：返回 None，前端提示检查失败，不降级缓存
+    // 限流（403/429）、网络错误或其他非成功：先降级 Atom feed；Atom 也失败才返回 None
     if status.as_u16() == 403 || status.as_u16() == 429 || !status.is_success() {
-        return None;
+        return fetch_update_from_atom(current);
     }
     let release: serde_json::Value = resp.json().ok()?;
     let tag = release.get("tag_name")?.as_str()?.trim_start_matches('v').to_string();
@@ -1309,6 +1534,68 @@ async fn start_agent_bridge(app: tauri::AppHandle) {
     }
 }
 
+/// 下一个整点（秒归零），用于整点喝水/久坐提醒
+fn next_whole_hour() -> chrono::DateTime<chrono::Local> {
+    use chrono::Timelike;
+    let now = chrono::Local::now();
+    let mut target = now + chrono::Duration::minutes(60 - now.minute() as i64);
+    target -= chrono::Duration::seconds(target.second() as i64);
+    target
+}
+
+/// 今天的指定时刻；已过则顺延到明天
+fn next_daily_at(hour: u32, minute: u32) -> chrono::DateTime<chrono::Local> {
+    use chrono::TimeZone;
+    let now = chrono::Local::now();
+    let today = now
+        .date_naive()
+        .and_hms_opt(hour, minute, 0)
+        .unwrap_or_else(|| now.naive_local());
+    let target = chrono::Local
+        .from_local_datetime(&today)
+        .earliest()
+        .unwrap_or(now);
+    if target <= now {
+        target + chrono::Duration::days(1)
+    } else {
+        target
+    }
+}
+
+/// 菜单快捷预设：直接建一条重复提醒并提示
+fn create_preset_reminder(
+    app: &tauri::AppHandle,
+    text: &str,
+    repeat: &str,
+    due: chrono::DateTime<chrono::Local>,
+) {
+    let reminder = Reminder {
+        id: uuid::Uuid::new_v4().to_string(),
+        text: text.to_string(),
+        due_at: due.to_rfc3339(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        lead_minutes: None,
+        repeat: normalize_repeat(Some(repeat)),
+    };
+    let mut list = reminders_list(app.clone());
+    list.push(reminder.clone());
+    persist_reminders(app, &list);
+    let shared = app.state::<SharedState>();
+    schedule_reminder(app, shared.inner(), reminder);
+    let label = match repeat {
+        "hourly" => "每小时",
+        "daily" => "每天",
+        "weekdays" => "工作日",
+        "weekly" => "每周",
+        _ => "一次性",
+    };
+    send_system_notification(
+        app,
+        "已添加提醒",
+        &format!("{}（{}，首次 {}）", text, label, due.format("%m-%d %H:%M")),
+    );
+}
+
 #[tauri::command]
 fn show_pet_context_menu(app: tauri::AppHandle) {
     let Some(win) = app.get_webview_window("pet") else { return };
@@ -1329,6 +1616,13 @@ fn show_pet_context_menu(app: tauri::AppHandle) {
     let bury = MenuItem::with_id(&app, "bury", "💩 埋粑粑", true, None::<&str>).unwrap();
     let sep1 = PredefinedMenuItem::separator(&app).unwrap();
     let reminder = MenuItem::with_id(&app, "reminder", "⏰ 添加提醒", true, None::<&str>).unwrap();
+    let quick_water = MenuItem::with_id(&app, "quick-water", "💧 每小时喝水", true, None::<&str>).unwrap();
+    let quick_stand = MenuItem::with_id(&app, "quick-stand", "🧘 每小时起来活动", true, None::<&str>).unwrap();
+    let quick_sleep = MenuItem::with_id(&app, "quick-sleep", "🌙 每天 22:30 休息", true, None::<&str>).unwrap();
+    let quick_submenu = Submenu::with_id(&app, "ctx-quick-reminders", "⏱ 快捷提醒", true).unwrap();
+    quick_submenu
+        .append_items(&[&quick_water, &quick_stand, &quick_sleep])
+        .unwrap();
     let dashboard = MenuItem::with_id(
         &app,
         "dashboard",
@@ -1345,7 +1639,7 @@ fn show_pet_context_menu(app: tauri::AppHandle) {
     let quit = MenuItem::with_id(&app, "quit", "❌ 退出", true, None::<&str>).unwrap();
 
     let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![
-        &walk, &jump, &stalk, &bury, &sep1, &reminder, &dashboard, &pets_submenu,
+        &walk, &jump, &stalk, &bury, &sep1, &reminder, &quick_submenu, &dashboard, &pets_submenu,
     ];
     if let Some(p) = &pocket {
         items.push(p);
@@ -1362,6 +1656,26 @@ fn show_pet_context_menu(app: tauri::AppHandle) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
+        .on_window_event(|window, event| {
+            if window.label() == "pet" {
+                if let tauri::WindowEvent::Moved(_) = event {
+                    let app = window.app_handle();
+                    let shared = app.state::<SharedState>();
+                    let mut last = shared.last_position_save.lock().unwrap();
+                    let now = Instant::now();
+                    let due = last.map_or(true, |t| now.duration_since(t) >= Duration::from_millis(500));
+                    if due {
+                        *last = Some(now);
+                        drop(last);
+                        save_window_position(app);
+                    }
+                }
+            }
+        })
         .setup(|app| {
             // 首次启动：从 Electron 旧 userData 迁移历史配置/提醒/统计（不覆盖已有数据）
             migrate_legacy_data(app.handle());
@@ -1369,6 +1683,9 @@ fn main() {
             // 恢复持久化的置顶 / 穿透 / 大小设置
             let persisted = get_settings(app.handle().clone());
             apply_pet_settings(app.handle(), &persisted);
+
+            // 恢复上次桌宠位置（坐标需落在当前可见屏幕内）
+            restore_window_position(app.handle());
 
             // 注册跨命令 / bridge 共享状态
             app.manage(SharedState::default());
@@ -1410,7 +1727,7 @@ fn main() {
             .title("添加提醒")
             .decorations(false)
             .transparent(true)
-            .inner_size(390.0, 360.0)
+            .inner_size(390.0, 440.0)
             .resizable(false)
             .visible(false)
             .build()?;
@@ -1425,6 +1742,15 @@ fn main() {
                     }
                     "reminder" => {
                         show_reminder_composer(app);
+                    }
+                    "quick-water" => {
+                        create_preset_reminder(app, "该喝水啦 💧", "hourly", next_whole_hour());
+                    }
+                    "quick-stand" => {
+                        create_preset_reminder(app, "起来活动一下 🧘", "hourly", next_whole_hour());
+                    }
+                    "quick-sleep" => {
+                        create_preset_reminder(app, "该休息啦 🌙", "daily", next_daily_at(22, 30));
                     }
                     "dashboard" | "tray-dashboard" => {
                         if let Some(dash) = app.get_webview_window("dashboard") {
@@ -1471,7 +1797,10 @@ fn main() {
                     "tray-update" => {
                         // 检查更新：当前无更新源，占位
                     }
-                    "quit" | "tray-quit" => app.exit(0),
+                    "quit" | "tray-quit" => {
+                        save_window_position(app);
+                        app.exit(0)
+                    }
                     _ => {}
                 }
             });
@@ -1511,8 +1840,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_settings, update_settings,
+            autostart_get, autostart_set,
             pets_list, pets_activate,
             reminders_list, reminders_save, reminders_remove, reminders_get, reminders_update,
+            reminders_snooze,
             interactions_stats, interactions_trigger,
             show_pet_context_menu,
             window_show_reminder, window_show_dashboard,

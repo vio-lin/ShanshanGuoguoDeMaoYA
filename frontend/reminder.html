@@ -47,7 +47,7 @@
       font-size: 13px;
       color: var(--muted, #9a7b6a);
     }
-    input[type="text"], input[type="datetime-local"] {
+    input[type="text"], input[type="datetime-local"], select {
       width: 100%;
       padding: 10px 14px;
       border: 1px solid var(--accent, #ffc987);
@@ -58,6 +58,7 @@
       outline: none;
       transition: border-color 0.2s;
     }
+    select { appearance: none; -webkit-appearance: none; }
     input:focus {
       border-color: var(--primary, #ff8a24);
     }
@@ -115,31 +116,79 @@
     .reminder-list {
       max-height: 150px;
       overflow-y: auto;
-    }
-    .reminder-list::-webkit-scrollbar {
+    }    .reminder-list::-webkit-scrollbar {
       width: 4px;
     }
     .reminder-list::-webkit-scrollbar-thumb {
       background: var(--accent, #ffc987);
       border-radius: 2px;
     }
+    .due-text {
+      font-size: 15px;
+      color: var(--text, #3a2a20);
+      line-height: 1.5;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+    .due-time {
+      font-size: 12px;
+      color: var(--muted, #9a7b6a);
+      margin-bottom: 14px;
+    }
+    .snooze-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .snooze-row button {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 12px;
+      background: var(--background, #fff7ed);
+      color: var(--text, #3a2a20);
+      border: 1px solid var(--accent, #ffc987);
+    }
   </style>
 </head>
 <body>
   <div id="reminder-card">
     <div class="card">
-      <div class="title">⏰ 添加提醒</div>
-      <div class="input-group">
-        <label>提醒内容</label>
-        <input type="text" id="reminder-text" placeholder="输入提醒内容...">
+      <div class="title" id="card-title">⏰ 添加提醒</div>
+      <div id="compose-panel">
+        <div class="input-group">
+          <label>提醒内容</label>
+          <input type="text" id="reminder-text" placeholder="输入提醒内容...">
+        </div>
+        <div class="input-group">
+          <label>提醒时间</label>
+          <input type="datetime-local" id="reminder-time">
+        </div>
+        <div class="input-group">
+          <label>重复</label>
+          <select id="reminder-repeat">
+            <option value="none">不重复</option>
+            <option value="hourly">每小时</option>
+            <option value="daily">每天</option>
+            <option value="weekdays">工作日</option>
+            <option value="weekly">每周</option>
+          </select>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" id="cancel-btn">取消</button>
+          <button class="btn-primary" id="save-btn">保存</button>
+        </div>
       </div>
-      <div class="input-group">
-        <label>提醒时间</label>
-        <input type="datetime-local" id="reminder-time">
-      </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="cancel-btn">取消</button>
-        <button class="btn-primary" id="save-btn">保存</button>
+      <div id="due-panel" style="display: none;">
+        <div class="due-text" id="due-text"></div>
+        <div class="due-time" id="due-time"></div>
+        <div class="snooze-row">
+          <button data-minutes="5">5 分钟后</button>
+          <button data-minutes="10">10 分钟后</button>
+          <button data-minutes="30">30 分钟后</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="dismiss-btn">知道了</button>
+        </div>
       </div>
     </div>
   </div>

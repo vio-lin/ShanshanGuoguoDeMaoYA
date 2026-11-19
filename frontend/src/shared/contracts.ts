@@ -130,7 +130,11 @@ export interface Reminder {
   createdAt: string;
   /** 提前提醒分钟数（0 = 到点提醒；缺省视为 0） */
   leadMinutes?: number;
+  /** 重复规则：hourly / daily / weekdays / weekly；缺省 = 一次性 */
+  repeat?: RepeatRule | null;
 }
+
+export type RepeatRule = 'hourly' | 'daily' | 'weekdays' | 'weekly';
 
 export interface StateActivity {
   kind: string;
@@ -233,12 +237,17 @@ export interface PetAPI {
     get: () => Promise<Settings>;
     update: (patch: Partial<Settings>) => Promise<Settings>;
   };
+  autostart: {
+    get: () => Promise<boolean>;
+    set: (enabled: boolean) => Promise<boolean>;
+  };
   reminders: {
     list: () => Promise<Reminder[]>;
     get: (id: string) => Promise<Reminder | null>;
-    save: (input: { text: string; dueAt: string; leadMinutes?: number }) => Promise<Reminder>;
-    update: (id: string, input: Partial<{ text: string; dueAt: string; leadMinutes?: number | null }>) => Promise<Reminder>;
+    save: (input: { text: string; dueAt: string; leadMinutes?: number; repeat?: RepeatRule | null }) => Promise<Reminder>;
+    update: (id: string, input: Partial<{ text: string; dueAt: string; leadMinutes?: number | null; repeat?: RepeatRule | null }>) => Promise<Reminder>;
     remove: (id: string) => Promise<boolean>;
+    snooze: (id: string, minutes: number) => Promise<void>;
   };
   interactions: {
     list: () => Promise<InteractionSpec[]>;

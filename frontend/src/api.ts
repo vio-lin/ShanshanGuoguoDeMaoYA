@@ -58,12 +58,17 @@ export const petAPI: PetAPI = {
     get: () => invoke<Settings>('get_settings'),
     update: (patch) => invoke<Settings>('update_settings', { patch }),
   },
+  autostart: {
+    get: () => invoke<boolean>('autostart_get'),
+    set: (enabled) => invoke<boolean>('autostart_set', { enabled }),
+  },
   reminders: {
     list: () => invoke<Reminder[]>('reminders_list'),
     get: (id) => invoke<Reminder | null>('reminders_get', { id }),
     save: (input) => invoke<Reminder>('reminders_save', { input }),
     update: (id, input) => invoke<Reminder>('reminders_update', { id, input }),
     remove: (id) => invoke<boolean>('reminders_remove', { id }),
+    snooze: (id, minutes) => invoke<void>('reminders_snooze', { id, minutes }),
   },
   interactions: {
     list: () => currentInteractions(),
