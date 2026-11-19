@@ -110,10 +110,25 @@ jobs:
           name: windows-installers
           path: windows
 
+      - name: Collect installers
+        run: |
+          mkdir -p dist
+          find macos windows -type f -name '*.dmg' -exec cp {} dist/ \;
+          find macos windows -type f -name '*.exe' -exec cp {} dist/ \;
+          ls -la dist
+          if [ -z "$(ls -A dist/*.dmg 2>/dev/null)" ]; then
+            echo "::error::未找到 macOS dmg，请检查 build-macos 的 bundle 产物与 artifact 目录结构"
+            exit 1
+          fi
+          if [ -z "$(ls -A dist/*.exe 2>/dev/null)" ]; then
+            echo "::error::未找到 Windows exe，请检查 build-windows 的 nsis 产物"
+            exit 1
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: RELEASE_NOTES.md
           files: |
-            macos/*.dmg
-            windows/*.exe
+            dist/*.dmg
+            dist/*.exe
