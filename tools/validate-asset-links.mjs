@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -32,7 +32,16 @@ for (const dir of petDirs) {
     continue;
   }
   const assetRoot = path.join(petsRoot, petId, 'assets');
-  const expected = new Set([spec.character?.coreAsset, ...(spec.states ?? []).flatMap((state) => state.frames ?? [])].filter(Boolean));
+  // 运行时只加载动画帧；core-ip 是仓库母版，留在 assets-original/，不进安装包。
+  const expected = new Set((spec.states ?? []).flatMap((state) => state.frames ?? []).filter(Boolean));
+  const coreAsset = spec.character?.coreAsset;
+  if (coreAsset) {
+    try {
+      await access(path.join(petsRoot, petId, 'assets-original', coreAsset));
+    } catch (error) {
+      errors.push(`${petId}: missing master asset in assets-original: ${coreAsset}`);
+    }
+  }
   for (const name of expected) {
     if (name.includes('\\')) errors.push(`${petId}: asset paths must use forward slashes: ${name}`);
   }
@@ -56,10 +65,14 @@ for (const dir of petDirs) {
   totalReferenced += expected.size;
 }
 
-for (const relative of ['src/renderer/pet/index.ts']) {
+for (const relative of ['frontend/src/renderer/pet/index.ts']) {
   const source = await readFile(path.join(root, relative), 'utf8');
-  const recursiveContext = /require\.context\(\s*['"]\.\.\/\.\.\/pets['"]\s*,\s*true\s*,/u;
-  if (!recursiveContext.test(source)) errors.push(`${relative} must recursively import nested pet assets`);
+  if (!/import\.meta\.glob\(\s*['"]\/src\/pets\/\*\*\/assets\/\*\*\/\*\.png['"]/u.test(source)) {
+    errors.push(`${relative} must glob only packed assets (/src/pets/**/assets/**/*.png)`);
+  }
+  if (/['"]\/src\/pets\/\*\*\/\*\.png['"]/u.test(source)) {
+    errors.push(`${relative} must not glob the whole src/pets tree (assets-original would be packed)`);
+  }
 }
 
 if (errors.length) {

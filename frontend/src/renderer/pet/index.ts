@@ -12,9 +12,10 @@ const agentBubbles = document.getElementById('agent-bubbles') as HTMLDivElement;
 // Chromium 会默认把 img 当作可拖拽内容；桌宠只允许窗口拖拽。
 container.addEventListener('dragstart', (event) => event.preventDefault());
 
-// Vite 构建时递归收集所有宠物的素材，运行时按当前宠物过滤。
+// Vite 构建时递归收集所有宠物的打包素材（assets/ 为 pngquant 量化版；
+// assets-original/ 是仓库保留的无损母版，显式排除，不进安装包）。
 const assetMap = new Map<string, string>();
-const petAssetEntries = import.meta.glob('/src/pets/**/*.png', {
+const petAssetEntries = import.meta.glob('/src/pets/**/assets/**/*.png', {
   eager: true,
   query: '?url',
   import: 'default',

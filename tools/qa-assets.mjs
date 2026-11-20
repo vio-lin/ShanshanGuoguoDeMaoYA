@@ -167,7 +167,9 @@ for (const target of targets) {
     for (const frame of state.frames) {
       const errors = [];
       const diagnostics = [];
-      const file = path.join(assetDir, frame);
+      // core-ip 母版保存在 assets-original/，其余运行时帧在 assets/。
+      const frameRoot = state.id === 'core-ip' ? path.join(path.dirname(assetDir), 'assets-original') : assetDir;
+      const file = path.join(frameRoot, frame);
       try {
         const fileBytes = await readFile(file);
         const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -315,7 +317,9 @@ for (let index = 0; index < records.length; index += 1) {
   const record = records[index];
   if (!record || !record.frame) continue;
   try {
-    const thumb = await sharp(path.join(assetDirByPet.get(record.petId) ?? '', record.frame)).resize(190, 190, { fit: 'contain' }).png().toBuffer();
+    const petRoot = assetDirByPet.get(record.petId) ?? '';
+    const thumbRoot = record.state === 'core-ip' ? path.join(path.dirname(petRoot), 'assets-original') : petRoot;
+    const thumb = await sharp(path.join(thumbRoot, record.frame)).resize(190, 190, { fit: 'contain' }).png().toBuffer();
     const size = record.bounds ? `${record.bounds[2] - record.bounds[0] + 1}×${record.bounds[3] - record.bounds[1] + 1}` : 'missing';
     const code = record.diagnostics?.[0]?.code;
     const petTag = record.petId ? `${record.petId} · ` : '';

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -32,7 +32,15 @@ for (const target of targets) {
   const { petId, spec, assetDirectory } = target;
   const tag = petId ? `[${petId}] ` : '';
   const usedFiles = new Set();
-  usedFiles.add(spec.character.coreAsset.replaceAll('\\', '/'));
+  // coreAsset 是仓库母版，放在 assets-original/，不参与运行时打包，单独校验存在性。
+  const coreAsset = spec.character?.coreAsset?.replaceAll('\\', '/');
+  if (coreAsset && petId) {
+    try {
+      await access(path.join(root, 'src', 'pets', petId, 'assets-original', coreAsset));
+    } catch {
+      issues.push({ gate: 'asset-coverage', petId, file: coreAsset, message: `${tag}master asset missing in assets-original` });
+    }
+  }
   const triggerOwners = new Map();
   const stateById = new Map(spec.states.map((state) => [state.id, state]));
 

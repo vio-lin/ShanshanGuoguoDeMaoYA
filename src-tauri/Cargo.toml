@@ -1,6 +1,6 @@
 [package]
 name = "ragdoll-pet"
-version = "1.6.0"
+version = "1.6.1"
 description = "布偶猫桌宠"
 edition = "2021"
 
