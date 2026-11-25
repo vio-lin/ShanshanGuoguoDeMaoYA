@@ -17,6 +17,7 @@ export default defineConfig({
         pet: resolve(feDir, 'pet.html'),
         dashboard: resolve(feDir, 'dashboard.html'),
         reminder: resolve(feDir, 'reminder.html'),
+        'todo-box': resolve(feDir, 'todo-box.html'),
       },
     },
   },

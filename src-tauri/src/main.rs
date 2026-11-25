@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{
@@ -29,6 +30,13 @@ struct Settings {
     click_through: bool,
     pet_scale: f64,
     current_pet: String,
+    /// 待办箱子与桌宠的水平间距（点）；0 = 紧贴
+    #[serde(default = "default_todo_box_gap")]
+    todo_box_gap: f64,
+}
+
+fn default_todo_box_gap() -> f64 {
+    2.0
 }
 
 impl Default for Settings {
@@ -40,6 +48,7 @@ impl Default for Settings {
             click_through: false,
             pet_scale: 1.0,
             current_pet: "ragdoll".to_string(),
+            todo_box_gap: default_todo_box_gap(),
         }
     }
 }
@@ -106,6 +115,77 @@ fn restore_window_position(app: &tauri::AppHandle) {
     }
 }
 
+/// 桌宠旁边的待办箱子窗口：尺寸与贴边间距（物理像素）
+const TODO_BOX_SIZE: f64 = 60.0;
+/// 箱子间距上限（点），防止配置过大把箱子推出屏幕
+const TODO_BOX_GAP_MAX_PT: f64 = 48.0;
+
+/// 把箱子窗口贴到桌宠窗口右侧；右侧空间不足时翻到左侧，并夹在当前显示器可见区域内
+fn position_todo_box(app: &tauri::AppHandle) {
+    let Some(pet) = app.get_webview_window("pet") else {
+        return;
+    };
+    let Some(box_win) = app.get_webview_window("todo-box") else {
+        return;
+    };
+    let (Ok(pet_pos), Ok(pet_size), Ok(box_size)) =
+        (pet.outer_position(), pet.outer_size(), box_win.outer_size())
+    else {
+        return;
+    };
+
+    let box_w = box_size.width as i32;
+    let box_h = box_size.height as i32;
+    let gap_pt = get_settings(app.clone())
+        .todo_box_gap
+        .clamp(0.0, TODO_BOX_GAP_MAX_PT);
+    let gap = (gap_pt * pet.scale_factor().unwrap_or(1.0)).round() as i32;
+    // 素材画布左右各有约 20% 透明留白，贴边时按留白比例收拢视觉间距
+    let (trim_right, trim_left) = *BOX_TRIM.lock().unwrap_or_else(|e| e.into_inner());
+    let pet_w = pet_size.width as i32;
+    let trim_right_px = ((trim_right.clamp(0.0, 0.45) * pet_w as f64).round()) as i32;
+    let trim_left_px = ((trim_left.clamp(0.0, 0.45) * pet_w as f64).round()) as i32;
+    let mut x = pet_pos.x + pet_w + gap - trim_right_px;
+    let mut y = pet_pos.y + pet_size.height as i32 - box_h;
+
+    if let Ok(Some(monitor)) = pet.current_monitor() {
+        let mp = monitor.position();
+        let ms = monitor.size();
+        let min_x = mp.x;
+        let max_x = mp.x + ms.width as i32 - box_w;
+        let min_y = mp.y;
+        let max_y = mp.y + ms.height as i32 - box_h;
+        // 右侧放不下就翻到左侧
+        if x > max_x {
+            x = pet_pos.x - box_w - gap + trim_left_px;
+        }
+        x = x.clamp(min_x, max_x.max(min_x));
+        y = y.clamp(min_y, max_y.max(min_y));
+    }
+
+    let _ = box_win.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
+/// 显示/隐藏桌宠时同步箱子窗口（箱子跟着桌宠一起出现或收起）
+fn set_pet_visible(app: &tauri::AppHandle, visible: bool) {
+    if let Some(win) = app.get_webview_window("pet") {
+        if visible {
+            let _ = win.show();
+            let _ = win.set_focus();
+        } else {
+            let _ = win.hide();
+        }
+    }
+    if let Some(box_win) = app.get_webview_window("todo-box") {
+        if visible {
+            position_todo_box(app);
+            let _ = box_win.show();
+        } else {
+            let _ = box_win.hide();
+        }
+    }
+}
+
 /// 把设置应用到桌宠主窗口：置顶、鼠标穿透、按缩放调整窗口大小
 fn apply_pet_settings(app: &tauri::AppHandle, settings: &Settings) {
     let Some(pet) = app.get_webview_window("pet") else {
@@ -122,6 +202,8 @@ fn apply_pet_settings(app: &tauri::AppHandle, settings: &Settings) {
 struct SharedState {
     /// 提醒到点定时器：reminder id -> 任务句柄
     reminder_timers: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
+    /// 待办到点定时器：todo id -> 任务句柄（到期后按天续排，直到关闭）
+    todo_timers: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
     /// 纪念日模拟日期 MM-DD（None = 按真实今天匹配）
     anniversary_sim: Mutex<Option<String>>,
     /// agent 事件去重：(key, 投递时刻)
@@ -132,6 +214,8 @@ struct SharedState {
     update_cache: Mutex<Option<(Instant, Option<UpdateInfo>)>>,
     /// 窗口位置写入节流：上次落盘时刻
     last_position_save: Mutex<Option<Instant>>,
+    /// 箱子窗口位置跟随节流：上次同步时刻
+    last_box_move: Mutex<Option<Instant>>,
 }
 
 #[tauri::command]
@@ -166,6 +250,7 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Settings 
         let _ = fs::write(&path, content);
     }
     apply_pet_settings(&app, &current);
+    position_todo_box(&app);
     current
 }
 
@@ -323,6 +408,56 @@ struct Reminder {
     repeat: Option<String>,
 }
 
+/// 一次延期记录（谁把 dueAt 从哪挪到哪）
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Postponement {
+    from: String,
+    to: String,
+    at: String,
+    minutes: u32,
+}
+
+fn default_priority() -> u8 {
+    3
+}
+
+fn default_todo_status() -> String {
+    "open".to_string()
+}
+
+/// 待办任务：与 Reminder 分开存，但复用同一套到点提醒通道。
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Todo {
+    id: String,
+    /// 标题：列表主行，1–80 字
+    title: String,
+    #[serde(default)]
+    /// 正文：可选，≤2000 字
+    content: String,
+    /// 精确到分的 RFC3339 时间
+    due_at: String,
+    /// 1–5，1 最高（红/橙/黄/绿/蓝）
+    #[serde(default = "default_priority")]
+    priority: u8,
+    /// open / closed / abandoned
+    #[serde(default = "default_todo_status")]
+    status: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    closed_at: Option<String>,
+    /// 放弃理由：仅 status = abandoned 时存在
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    abandon_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    postponements: Vec<Postponement>,
+    /// 迁移来源标记，例如 reminder-migration
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
+}
+
 /// 只接受白名单内的重复规则
 fn normalize_repeat(v: Option<&str>) -> Option<String> {
     match v {
@@ -476,6 +611,394 @@ fn schedule_reminder(app: &tauri::AppHandle, shared: &SharedState, reminder: Rem
 fn unschedule_reminder(shared: &SharedState, id: &str) {
     if let Some(old) = shared.reminder_timers.lock().unwrap().remove(id) {
         old.abort();
+    }
+}
+
+// ---------- 待办 ----------
+
+fn todos_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path().app_data_dir().unwrap().join("todos.json")
+}
+
+fn read_todos(app: &tauri::AppHandle) -> Vec<Todo> {
+    let path = todos_path(app);
+    if let Ok(content) = fs::read_to_string(&path) {
+        if let Ok(list) = serde_json::from_str::<Vec<Todo>>(&content) {
+            return list;
+        }
+    }
+    vec![]
+}
+
+fn persist_todos(app: &tauri::AppHandle, list: &[Todo]) {
+    let path = todos_path(app);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(content) = serde_json::to_string_pretty(&list) {
+        let _ = fs::write(&path, content);
+    }
+}
+
+/// 时间统一精确到分：秒和纳秒归零
+fn normalize_minute(value: &str) -> Option<String> {
+    use chrono::Timelike;
+    let dt = chrono::DateTime::parse_from_rfc3339(value).ok()?;
+    let dt = dt.with_second(0)?.with_nanosecond(0)?;
+    Some(dt.to_rfc3339())
+}
+
+fn clamp_priority(value: Option<u64>) -> u8 {
+    value.unwrap_or(3).clamp(1, 5) as u8
+}
+
+fn trim_chars(value: &str, max: usize) -> String {
+    value.trim().chars().take(max).collect()
+}
+
+fn build_todo(input: &serde_json::Value) -> Option<Todo> {
+    let title = trim_chars(input["title"].as_str().unwrap_or(""), 80);
+    if title.is_empty() {
+        return None;
+    }
+    let due_at = normalize_minute(input["dueAt"].as_str().unwrap_or(""))?;
+    let now = chrono::Utc::now().to_rfc3339();
+    Some(Todo {
+        id: uuid::Uuid::new_v4().to_string(),
+        title,
+        content: trim_chars(input["content"].as_str().unwrap_or(""), 2000),
+        due_at,
+        priority: clamp_priority(input["priority"].as_u64()),
+        status: "open".to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+        closed_at: None,
+        abandon_reason: None,
+        postponements: Vec::new(),
+        source: input["source"].as_str().map(|s| s.to_string()),
+    })
+}
+
+fn emit_todos_changed(app: &tauri::AppHandle) {
+    let _ = app.emit("todos-changed", read_todos(app));
+}
+
+fn overdue_days(due_at: &str) -> i64 {
+    let Ok(due) = chrono::DateTime::parse_from_rfc3339(due_at) else {
+        return 0;
+    };
+    let diff = chrono::Utc::now().timestamp_millis() - due.timestamp_millis();
+    if diff <= 0 {
+        0
+    } else {
+        diff / 86_400_000
+    }
+}
+
+/// 下次提醒时刻：未到期取 dueAt；已过期取今天/明天的同一时分，直到关闭
+fn next_todo_fire(due_at: &str, now_ms: i64) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let due = chrono::DateTime::parse_from_rfc3339(due_at).ok()?;
+    if due.timestamp_millis() > now_ms {
+        return Some(due);
+    }
+    let mut next = due;
+    while next.timestamp_millis() <= now_ms {
+        next += chrono::Duration::days(1);
+    }
+    Some(next)
+}
+
+fn unschedule_todo(shared: &SharedState, id: &str) {
+    if let Some(old) = shared.todo_timers.lock().unwrap().remove(id) {
+        old.abort();
+    }
+}
+
+fn schedule_todo(app: &tauri::AppHandle, shared: &SharedState, todo: &Todo) {
+    unschedule_todo(shared, &todo.id);
+    if todo.status != "open" {
+        return;
+    }
+    let id = todo.id.clone();
+    let app_handle = app.clone();
+    let handle = tauri::async_runtime::spawn(async move {
+        loop {
+            let list = read_todos(&app_handle);
+            let Some(current) = list.into_iter().find(|item| item.id == id) else {
+                break;
+            };
+            if current.status != "open" {
+                break;
+            }
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            let Some(fire) = next_todo_fire(&current.due_at, now_ms) else {
+                break;
+            };
+            let delay_ms = (fire.timestamp_millis() - now_ms).max(0) as u64;
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+
+            // 睡眠期间可能被关闭或改期，触发前重新读取
+            let list = read_todos(&app_handle);
+            let Some(latest) = list.into_iter().find(|item| item.id == id) else {
+                break;
+            };
+            if latest.status != "open" {
+                break;
+            }
+            let days = overdue_days(&latest.due_at);
+            let label = if days > 0 { "待办已过期" } else { "待办到期" };
+            send_system_notification(&app_handle, label, &latest.title);
+            let _ = app_handle.emit_to(
+                "reminder",
+                "todo-due",
+                serde_json::json!({ "todo": &latest, "overdueDays": days }),
+            );
+            if let Some(window) = app_handle.get_webview_window("reminder") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+            let _ = app_handle.emit_to(
+                "pet",
+                "state-activity",
+                serde_json::json!({
+                    "kind": "notify",
+                    "stateId": "notify",
+                    "durationMs": 1800,
+                    "feedback": &latest.title,
+                }),
+            );
+            // 同一分钟内不重复触发；下一轮排到明天同一时分
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+    shared.todo_timers.lock().unwrap().insert(todo.id.clone(), handle);
+}
+
+#[tauri::command]
+fn todos_list(app: tauri::AppHandle) -> Vec<Todo> {
+    read_todos(&app)
+}
+
+#[tauri::command]
+fn todos_create(
+    app: tauri::AppHandle,
+    shared: State<SharedState>,
+    input: serde_json::Value,
+) -> Result<Todo, String> {
+    let todo = build_todo(&input).ok_or_else(|| "标题不能为空，时间需为有效的 ISO 时间".to_string())?;
+    let mut list = read_todos(&app);
+    list.push(todo.clone());
+    persist_todos(&app, &list);
+    schedule_todo(&app, shared.inner(), &todo);
+    emit_todos_changed(&app);
+    Ok(todo)
+}
+
+#[tauri::command]
+fn todos_update(
+    app: tauri::AppHandle,
+    shared: State<SharedState>,
+    id: String,
+    patch: serde_json::Value,
+) -> Result<Todo, String> {
+    let mut list = read_todos(&app);
+    let Some(item) = list.iter_mut().find(|todo| todo.id == id) else {
+        return Err("待办不存在".to_string());
+    };
+    if let Some(value) = patch["title"].as_str() {
+        let title = trim_chars(value, 80);
+        if title.is_empty() {
+            return Err("标题不能为空".to_string());
+        }
+        item.title = title;
+    }
+    if let Some(value) = patch["content"].as_str() {
+        item.content = trim_chars(value, 2000);
+    }
+    if let Some(value) = patch["dueAt"].as_str() {
+        item.due_at = normalize_minute(value).ok_or_else(|| "时间格式无效".to_string())?;
+    }
+    if let Some(value) = patch["priority"].as_u64() {
+        item.priority = clamp_priority(Some(value));
+    }
+    item.updated_at = chrono::Utc::now().to_rfc3339();
+    let updated = item.clone();
+    persist_todos(&app, &list);
+    schedule_todo(&app, shared.inner(), &updated);
+    emit_todos_changed(&app);
+    Ok(updated)
+}
+
+#[tauri::command]
+fn todos_close(app: tauri::AppHandle, shared: State<SharedState>, id: String) -> bool {
+    let mut list = read_todos(&app);
+    let Some(item) = list.iter_mut().find(|todo| todo.id == id) else {
+        return false;
+    };
+    let now = chrono::Utc::now().to_rfc3339();
+    item.status = "closed".to_string();
+    item.closed_at = Some(now.clone());
+    item.updated_at = now;
+    persist_todos(&app, &list);
+    unschedule_todo(shared.inner(), &id);
+    emit_todos_changed(&app);
+    true
+}
+
+#[tauri::command]
+fn todos_reopen(app: tauri::AppHandle, shared: State<SharedState>, id: String) -> bool {
+    let mut list = read_todos(&app);
+    let Some(item) = list.iter_mut().find(|todo| todo.id == id) else {
+        return false;
+    };
+    item.status = "open".to_string();
+    item.closed_at = None;
+    item.abandon_reason = None;
+    item.updated_at = chrono::Utc::now().to_rfc3339();
+    let reopened = item.clone();
+    persist_todos(&app, &list);
+    schedule_todo(&app, shared.inner(), &reopened);
+    emit_todos_changed(&app);
+    true
+}
+
+/// 放弃待办：必须填写理由（trim 后非空），理由写入 abandon_reason
+#[tauri::command]
+fn todos_abandon(
+    app: tauri::AppHandle,
+    shared: State<SharedState>,
+    id: String,
+    reason: String,
+) -> bool {
+    let trimmed = reason.trim().to_string();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let mut list = read_todos(&app);
+    let Some(item) = list.iter_mut().find(|todo| todo.id == id) else {
+        return false;
+    };
+    let now = chrono::Utc::now().to_rfc3339();
+    item.status = "abandoned".to_string();
+    item.abandon_reason = Some(trimmed);
+    item.closed_at = Some(now.clone());
+    item.updated_at = now;
+    persist_todos(&app, &list);
+    unschedule_todo(shared.inner(), &id);
+    emit_todos_changed(&app);
+    true
+}
+
+#[tauri::command]
+fn todos_delete(app: tauri::AppHandle, shared: State<SharedState>, id: String) -> bool {
+    let mut list = read_todos(&app);
+    let before = list.len();
+    list.retain(|todo| todo.id != id);
+    if list.len() == before {
+        return false;
+    }
+    persist_todos(&app, &list);
+    unschedule_todo(shared.inner(), &id);
+    emit_todos_changed(&app);
+    true
+}
+
+#[tauri::command]
+fn todos_postpone(
+    app: tauri::AppHandle,
+    shared: State<SharedState>,
+    id: String,
+    minutes: u32,
+) -> Result<Todo, String> {
+    let minutes = minutes.clamp(1, 720);
+    let mut list = read_todos(&app);
+    let Some(item) = list.iter_mut().find(|todo| todo.id == id) else {
+        return Err("待办不存在".to_string());
+    };
+    let from = item.due_at.clone();
+    let base = chrono::DateTime::parse_from_rfc3339(&from)
+        .map_err(|_| "待办时间无效，无法延期".to_string())?;
+    let to = (base + chrono::Duration::minutes(minutes as i64)).to_rfc3339();
+    let now = chrono::Utc::now().to_rfc3339();
+    item.postponements.push(Postponement {
+        from: from.clone(),
+        to: to.clone(),
+        at: now.clone(),
+        minutes,
+    });
+    item.due_at = to;
+    item.updated_at = now;
+    let updated = item.clone();
+    persist_todos(&app, &list);
+    schedule_todo(&app, shared.inner(), &updated);
+    emit_todos_changed(&app);
+    Ok(updated)
+}
+
+/// 把旧 reminders.json 一次性转成待办：最低优先级 P5，保留原时间。
+/// 转换后备份并清空提醒文件，避免同一件事被两套调度重复提醒。
+fn migrate_reminders_to_todos(app: &tauri::AppHandle) -> usize {
+    let reminders = reminders_list(app.clone());
+    if reminders.is_empty() {
+        return 0;
+    }
+    let mut todos = read_todos(app);
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut added = 0usize;
+    for reminder in reminders {
+        let text = reminder.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let title = trim_chars(text, 80);
+        let content = if text.chars().count() > 80 {
+            text.to_string()
+        } else {
+            String::new()
+        };
+        let due_at = normalize_minute(&reminder.due_at).unwrap_or_else(|| reminder.due_at.clone());
+        // 已经迁移过（标题 + 时间一致）则不重复生成
+        if todos.iter().any(|todo| todo.title == title && todo.due_at == due_at) {
+            continue;
+        }
+        todos.push(Todo {
+            id: uuid::Uuid::new_v4().to_string(),
+            title,
+            content,
+            due_at,
+            priority: 5,
+            status: "open".to_string(),
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            closed_at: None,
+            abandon_reason: None,
+            postponements: Vec::new(),
+            source: Some("reminder-migration".to_string()),
+        });
+        added += 1;
+    }
+    if added > 0 {
+        persist_todos(app, &todos);
+    }
+    // 备份首次迁移前的原始提醒；后续残留写入不覆盖已有备份
+    let source = reminders_path(app);
+    let backup = source.with_file_name("reminders.pre-todo.json");
+    if !backup.exists() {
+        let _ = fs::copy(&source, &backup);
+    }
+    // 无论是否新增都清空旧提醒，避免两套调度重复提醒
+    let _ = fs::write(&source, "[]");
+    added
+}
+
+/// 启动时提示已有过期待办（不弹窗打断，只发一条系统通知）
+fn notify_overdue_on_start(app: &tauri::AppHandle) {
+    let overdue = read_todos(app)
+        .into_iter()
+        .filter(|todo| todo.status == "open" && overdue_days(&todo.due_at) > 0)
+        .count();
+    if overdue > 0 {
+        send_system_notification(app, "待办提醒", &format!("有 {overdue} 条待办已过期，记得处理"));
     }
 }
 
@@ -879,12 +1402,131 @@ fn window_show_reminder(app: tauri::AppHandle) {
     show_reminder_composer(&app);
 }
 
+/// 从桌宠旁的箱子打开小屋，并让前端切到待办页
+#[tauri::command]
+fn window_show_dashboard_todo(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("dashboard") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = app.emit_to("dashboard", "todo-box-open", ());
+    }
+    if let Some(b) = app.get_webview_window("todo-box") {
+        let _ = b.hide();
+    }
+}
+
 #[tauri::command]
 fn window_show_dashboard(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("dashboard") {
         let _ = w.show();
         let _ = w.set_focus();
     }
+    // 小屋展开时收起桌宠旁的箱子，避免两个浮层叠在一起
+    if let Some(b) = app.get_webview_window("todo-box") {
+        let _ = b.hide();
+    }
+}
+
+/// 拖动会话序号：自增即让上一个拖动线程退出
+static PET_DRAG_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// 待办箱子贴边用的素材留白比例（right, left），由箱子渲染器按当前宠物上报
+static BOX_TRIM: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((0.0, 0.0));
+
+/// 箱子渲染器启动时上报当前宠物素材的左右留白比例，并立即重排
+#[tauri::command]
+fn set_todo_box_trim(app: tauri::AppHandle, right: f64, left: f64) {
+    if let Ok(mut v) = BOX_TRIM.lock() {
+        *v = (right, left);
+    }
+    position_todo_box(&app);
+}
+
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    /// 全局鼠标按键状态：state 0 = combined session，button 0 = 左键
+    fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
+}
+
+fn left_button_down() -> bool {
+    unsafe { CGEventSourceButtonState(0, 0) }
+}
+
+fn move_window_impl(app: &tauri::AppHandle, label: &str, dx: f64, dy: f64) {
+    let Some(win) = app.get_webview_window(label) else {
+        return;
+    };
+    let Ok(pos) = win.outer_position() else { return };
+    let Ok(size) = win.outer_size() else { return };
+
+    let mut x = pos.x + dx.round() as i32;
+    let mut y = pos.y + dy.round() as i32;
+    if let Ok(Some(monitor)) = win.current_monitor() {
+        let mp = monitor.position();
+        let ms = monitor.size();
+        x = x.clamp(mp.x, (mp.x + ms.width as i32 - size.width as i32).max(mp.x));
+        y = y.clamp(mp.y, (mp.y + ms.height as i32 - size.height as i32).max(mp.y));
+    }
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
+/// 拖动桌宠：按指针位移移动窗口（物理像素增量）
+#[tauri::command]
+fn move_pet_window(app: tauri::AppHandle, dx: f64, dy: f64) {
+    move_window_impl(&app, "pet", dx, dy);
+}
+
+/// 拖动通用窗口：按指针位移移动指定窗口（物理像素增量）
+#[tauri::command]
+fn move_window(app: tauri::AppHandle, label: String, dx: f64, dy: f64) {
+    move_window_impl(&app, &label, dx, dy);
+}
+
+/// 开始拖动：后台线程跟随全局光标移动窗口，不依赖 WebView 后续 pointermove
+fn start_drag_thread(app: tauri::AppHandle, label: &str) {
+    let seq = PET_DRAG_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    let app2 = app.clone();
+    let label2 = label.to_string();
+    if app.get_webview_window(label).is_none() {
+        return;
+    }
+    std::thread::spawn(move || {
+        let Ok(mut last) = app2.cursor_position() else { return };
+        let started = Instant::now();
+        while PET_DRAG_SEQ.load(Ordering::SeqCst) == seq
+            && started.elapsed() < Duration::from_secs(10)
+        {
+            std::thread::sleep(Duration::from_millis(8));
+            // 鼠标一旦松开立即停，避免 pointerup 丢失时窗口继续跟着光标跑
+            if !left_button_down() {
+                break;
+            }
+            let Ok(cur) = app2.cursor_position() else { break };
+            let dx = cur.x - last.x;
+            let dy = cur.y - last.y;
+            if dx.abs() < 0.5 && dy.abs() < 0.5 {
+                continue;
+            }
+            last = cur;
+            move_window_impl(&app2, &label2, dx, dy);
+        }
+    });
+}
+
+#[tauri::command]
+fn start_pet_drag(app: tauri::AppHandle) {
+    start_drag_thread(app, "pet");
+}
+
+/// 通用窗口拖动（dashboard / reminder 等），替代原生 startDragging
+#[tauri::command]
+fn start_window_drag(app: tauri::AppHandle, window: String) {
+    start_drag_thread(app, &window);
+}
+
+#[tauri::command]
+fn end_pet_drag() {
+    PET_DRAG_SEQ.fetch_add(1, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -899,13 +1541,22 @@ fn window_hide_dashboard(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("dashboard") {
         let _ = w.hide();
     }
+    // 小屋收起后，桌宠还露在外面就把箱子放回来
+    let pet_visible = app
+        .get_webview_window("pet")
+        .and_then(|p| p.is_visible().ok())
+        .unwrap_or(false);
+    if pet_visible {
+        if let Some(b) = app.get_webview_window("todo-box") {
+            position_todo_box(&app);
+            let _ = b.show();
+        }
+    }
 }
 
 #[tauri::command]
 fn window_hide_pet(app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("pet") {
-        let _ = w.hide();
-    }
+    set_pet_visible(&app, false);
 }
 
 // ---------- runtime 就绪/失败上报（占位） ----------
@@ -1512,6 +2163,147 @@ async fn reminders_delete_handler(
     }
 }
 
+async fn todos_list_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "ok": true, "todos": read_todos(&app) }))
+}
+
+async fn todos_get_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match read_todos(&app).into_iter().find(|t| t.id == id) {
+        Some(todo) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "todo": todo }))),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "待办不存在" })),
+        ),
+    }
+}
+
+async fn todos_create_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    Json(input): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let Some(todo) = build_todo(&input) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": "标题不能为空，时间需为有效的 ISO 时间" })),
+        );
+    };
+    let mut list = read_todos(&app);
+    list.push(todo.clone());
+    persist_todos(&app, &list);
+    let shared = app.state::<SharedState>();
+    schedule_todo(&app, shared.inner(), &todo);
+    emit_todos_changed(&app);
+    (StatusCode::OK, Json(serde_json::json!({ "ok": true, "todo": todo })))
+}
+
+async fn todos_update_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+    Json(patch): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    match todos_update(app_call, shared, id, patch) {
+        Ok(todo) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "todo": todo }))),
+        Err(error) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": error })),
+        ),
+    }
+}
+
+async fn todos_close_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    if todos_close(app_call, shared, id) {
+        (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "待办不存在" })),
+        )
+    }
+}
+
+async fn todos_reopen_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    if todos_reopen(app_call, shared, id) {
+        (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "待办不存在" })),
+        )
+    }
+}
+
+async fn todos_abandon_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    let reason = body
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if todos_abandon(app_call, shared, id, reason) {
+        (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+    } else {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": "待办不存在或放弃理由为空" })),
+        )
+    }
+}
+
+async fn todos_delete_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    if todos_delete(app_call, shared, id) {
+        (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "待办不存在" })),
+        )
+    }
+}
+
+async fn todos_postpone_handler(
+    AxumState(app): AxumState<tauri::AppHandle>,
+    AxumPath(id): AxumPath<String>,
+    Json(input): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let minutes = input["minutes"].as_u64().unwrap_or(10) as u32;
+    let shared = app.state::<SharedState>();
+    let app_call = app.clone();
+    match todos_postpone(app_call, shared, id, minutes) {
+        Ok(todo) => (StatusCode::OK, Json(serde_json::json!({ "ok": true, "todo": todo }))),
+        Err(error) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": error })),
+        ),
+    }
+}
+
 async fn start_agent_bridge(app: tauri::AppHandle) {
     let router = Router::new()
         .route("/agent-task", post(agent_task_handler))
@@ -1525,6 +2317,17 @@ async fn start_agent_bridge(app: tauri::AppHandle) {
                 .put(reminders_update_handler)
                 .delete(reminders_delete_handler),
         )
+        .route("/todos", get(todos_list_handler).post(todos_create_handler))
+        .route(
+            "/todos/{id}",
+            get(todos_get_handler)
+                .put(todos_update_handler)
+                .delete(todos_delete_handler),
+        )
+        .route("/todos/{id}/close", post(todos_close_handler))
+        .route("/todos/{id}/reopen", post(todos_reopen_handler))
+        .route("/todos/{id}/abandon", post(todos_abandon_handler))
+        .route("/todos/{id}/postpone", post(todos_postpone_handler))
         .with_state(app);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 46231));
@@ -1673,6 +2476,15 @@ fn main() {
                         drop(last);
                         save_window_position(app);
                     }
+                    // 箱子窗口跟随桌宠移动（更细的节流，避免拖动时明显滞后）
+                    let mut box_last = shared.last_box_move.lock().unwrap();
+                    let box_due =
+                        box_last.map_or(true, |t| now.duration_since(t) >= Duration::from_millis(60));
+                    if box_due {
+                        *box_last = Some(now);
+                        drop(box_last);
+                        position_todo_box(app);
+                    }
                 }
             }
         })
@@ -1690,12 +2502,22 @@ fn main() {
             // 注册跨命令 / bridge 共享状态
             app.manage(SharedState::default());
 
-            // 启动时恢复已保存提醒的到点定时器
+            // 启动时恢复已保存提醒的到点定时器（先迁移，避免旧提醒与待办重复提醒）
             let shared = app.state::<SharedState>();
             *shared.session_started.lock().unwrap() = Some(Instant::now());
+            let migrated = migrate_reminders_to_todos(app.handle());
+            if migrated > 0 {
+                eprintln!("[todo] migrated {migrated} reminders to todos");
+            }
             for reminder in reminders_list(app.handle().clone()) {
                 schedule_reminder(app.handle(), shared.inner(), reminder);
             }
+
+            // 为全部待办排提醒
+            for todo in read_todos(app.handle()) {
+                schedule_todo(app.handle(), shared.inner(), &todo);
+            }
+            notify_overdue_on_start(app.handle());
 
             // 启动广播纪念日命中状态（前端 init 也会主动拉取一次）
             let sim = shared.anniversary_sim.lock().unwrap().clone();
@@ -1733,6 +2555,31 @@ fn main() {
             .build()?;
             let _ = reminder;
 
+            // 创建桌宠旁的待办箱子窗口（无边框透明小窗，位置跟随桌宠）
+            let todo_box = tauri::WebviewWindowBuilder::new(
+                app,
+                "todo-box",
+                tauri::WebviewUrl::App("frontend/todo-box.html".into()),
+            )
+            .title("待办箱子")
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .inner_size(TODO_BOX_SIZE, TODO_BOX_SIZE)
+            .resizable(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .accept_first_mouse(true)
+            .focused(false)
+            .visible(false)
+            .build()?;
+            let _ = todo_box;
+
+            position_todo_box(app.handle());
+            if let Some(box_win) = app.get_webview_window("todo-box") {
+                let _ = box_win.show();
+            }
+
             // 全局菜单事件处理（右键菜单 + 托盘菜单统一在此分发）
             app.on_menu_event(|app, event| {
                 match event.id.0.as_str() {
@@ -1758,20 +2605,18 @@ fn main() {
                             let _ = dash.set_focus();
                             let _ = dash.reload();
                         }
+                        if let Some(b) = app.get_webview_window("todo-box") {
+                            let _ = b.hide();
+                        }
                     }
                     "hide" => {
-                        if let Some(win) = app.get_webview_window("pet") {
-                            let _ = win.hide();
-                        }
+                        set_pet_visible(app, false);
                     }
                     "open-pocket" => {
                         let _ = open_pocket_dir(app);
                     }
                     "tray-show" => {
-                        if let Some(win) = app.get_webview_window("pet") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+                        set_pet_visible(app, true);
                     }
                     "pet-ragdoll" => activate_pet(app, "ragdoll"),
                     "pet-nini" => activate_pet(app, "nini"),
@@ -1824,14 +2669,11 @@ fn main() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("pet") {
-                            if win.is_visible().unwrap_or(false) {
-                                let _ = win.hide();
-                            } else {
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
+                        let visible = app
+                            .get_webview_window("pet")
+                            .and_then(|win| win.is_visible().ok())
+                            .unwrap_or(false);
+                        set_pet_visible(app, !visible);
                     }
                 })
                 .build(app)?;
@@ -1844,9 +2686,16 @@ fn main() {
             pets_list, pets_activate,
             reminders_list, reminders_save, reminders_remove, reminders_get, reminders_update,
             reminders_snooze,
+            todos_list, todos_create, todos_update, todos_close, todos_reopen, todos_abandon, todos_delete, todos_postpone,
             interactions_stats, interactions_trigger,
             show_pet_context_menu,
-            window_show_reminder, window_show_dashboard,
+            move_pet_window,
+        start_pet_drag,
+        end_pet_drag,
+        move_window,
+        start_window_drag,
+        set_todo_box_trim,
+            window_show_reminder, window_show_dashboard, window_show_dashboard_todo,
             window_hide_reminder, window_hide_dashboard, window_hide_pet,
             runtime_ready, runtime_fail,
             update_check, update_open,

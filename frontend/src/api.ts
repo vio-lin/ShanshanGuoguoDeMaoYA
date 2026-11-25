@@ -13,6 +13,9 @@ import type {
   SkillCheckResult,
   SkillInstallResult,
   StateActivity,
+  Todo,
+  TodoInput,
+  TodoPatch,
   TypingStatus,
   UpdateInfo,
 } from './shared/contracts';
@@ -70,6 +73,16 @@ export const petAPI: PetAPI = {
     remove: (id) => invoke<boolean>('reminders_remove', { id }),
     snooze: (id, minutes) => invoke<void>('reminders_snooze', { id, minutes }),
   },
+  todos: {
+    list: () => invoke<Todo[]>('todos_list'),
+    create: (input: TodoInput) => invoke<Todo>('todos_create', { input }),
+    update: (id: string, patch: TodoPatch) => invoke<Todo>('todos_update', { id, patch }),
+    close: (id: string) => invoke<boolean>('todos_close', { id }),
+    reopen: (id: string) => invoke<boolean>('todos_reopen', { id }),
+    abandon: (id: string, reason: string) => invoke<boolean>('todos_abandon', { id, reason }),
+    remove: (id: string) => invoke<boolean>('todos_delete', { id }),
+    postpone: (id: string, minutes: number) => invoke<Todo>('todos_postpone', { id, minutes }),
+  },
   interactions: {
     list: () => currentInteractions(),
     trigger: async (id) => {
@@ -89,9 +102,12 @@ export const petAPI: PetAPI = {
     openPocket: () => invoke<void>('files_open_pocket'),
   },
   window: {
+    moveBy: (dx: number, dy: number) => invoke<void>('move_pet_window', { dx, dy }),
+    startDrag: () => invoke<void>('start_pet_drag', {}),
+    startWindowDrag: (label: string) => invoke<void>('start_window_drag', { window: label }),
     beginDrag: () => tauri()?.window.getCurrentWindow().startDragging() ?? Promise.resolve(),
     updateDrag: () => Promise.resolve(),
-    endDrag: () => Promise.resolve(),
+    endDrag: () => invoke<void>('end_pet_drag', {}),
     showContextMenu: () => invoke<void>('show_pet_context_menu'),
     showReminder: () => invoke<void>('window_show_reminder'),
     showDashboard: () => invoke<void>('window_show_dashboard'),
@@ -128,6 +144,8 @@ export const petAPI: PetAPI = {
     onPetChanged: (listener) => subscribe<string>('pet-changed', listener),
     onAnniversaryChanged: (listener) => subscribe<AnniversaryStatus>('anniversary-changed', listener),
     onAgentTask: (listener) => subscribe<AgentTaskEvent>('agent-task', listener),
+    onTodosChanged: (listener) => subscribe<Todo[]>('todos-changed', listener),
+    onTodoDue: (listener) => subscribe<{ todo: Todo; overdueDays: number }>('todo-due', listener),
   },
 };
 

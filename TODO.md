@@ -1,6 +1,6 @@
 # TODO / 待办清单
 
-> 维护说明：本文件跟踪 ragdoll-pet（Tauri v2 迁移后）尚未完成、待验证或待拍板的事项。完成一项勾掉一项；新增待办按对应分组追加。最后更新：2026-11-19。
+> 维护说明：本文件跟踪 ragdoll-pet（Tauri v2 迁移后）尚未完成、待验证或待拍板的事项。完成一项勾掉一项；新增待办按对应分组追加。最后更新：2026-11-25。
 
 ## 一、发版阻塞（CI / Release）
 
@@ -21,7 +21,8 @@
 - [ ] **E2E 探针 `__petE2E`**：契约类型已在 `contracts.ts`，未在运行时暴露给测试。
 - [ ] **Dashboard 标题**：无边框原生标题固定「哈哈的小屋」，前端 `document.title` 随宠覆盖；未做原生标题随宠切换。
 - [ ] **更新流程线上实测**：本地走「已是最新」分支；「发现新版本」分支仅由版本比较单测覆盖。v1.6.0 上线后，1.5.1 客户端应能检出 1.6.0，可据此复验「发现新版本」分支与 API 限流时降级 `releases.atom` 的链路。
-- [ ] **面板待办编辑入口**：闹钟 HTTP 已闭环（`GET /reminders` 列表、`GET /reminders/:id`、`PUT /reminders/:id`、`DELETE /reminders/:id`），AI 可经本地接口查询/更新/删除；dashboard 待办 tab 面板目前仅「删除」，未做前端回填编辑（复用 reminder 弹窗预填）。
+- [x] ~~面板待办编辑入口~~：dashboard 待办页已支持新建/编辑（标题+内容+时分+5 档优先级）、关闭/重开、延期（自动记录 `postponements` 历史），见「五」。
+- [x] ~~v1.6.1 runtime core-ip 校验回归~~：`pet/index.ts` 强制要求 `character.coreAsset` 有运行时映射，而 `core-ip.png` 只保留在 `assets-original/`，启动即 `runtime fail`；已改为「无运行时映射则跳过」（母版不参与渲染）。
 
 ## 三、待用户拍板的决策项
 
@@ -52,6 +53,24 @@
 - [ ] **待真人验证：开机自启**——需在安装版 `.app` 上 enable/disable（dev 裸二进制下 LaunchAgent 路径可能不生效）。
 - [ ] **待真人回归：窗口拖动加固**——`.card` 可拖区域在 release 打包版上验证（dev 阶段 gcu 无法绑定裸二进制进程）。
 - [ ] （可选）给 agent-bridge 增加 `POST /reminders/{id}/snooze`，让 AI 侧也能执行「稍后提醒」。
+- [x] **待办（Todo）体系**：新增 `todos.json` 存储与 `Todo` / `Postponement` 数据结构；5 档优先级（P1 红 → P5 蓝，新建默认 P3）；`todos_list/create/update/close/reopen/delete/postpone` 七条命令与 HTTP `/todos` 系列端点；`todos-changed` / `todo-due` 事件。
+- [x] **旧提醒迁移**：启动时把 `reminders.json` 一次性转成待办（统一 P5、`source=reminder-migration`），备份 `reminders.pre-todo.json` 后清空旧文件；按「标题 + 时间」去重，后续残留也会被吸收，避免两套调度重复提醒（迁移已提前到提醒定时器注册之前）。
+- [x] **到期与过期提醒**：未到期按 `dueAt` 提醒；过期后每天同一时分继续提醒，标题区分「待办到期 / 待办已过期 N 天」；启动时对过期待办发一条系统通知（不弹窗打断）。
+- [x] **待办页 UI**：日历（周日开头、7×N 网格、每日最多 3 个优先级色点、点击日期筛选、今天/切月）+ 三栏（进行中 / 过期 / 已关闭，带计数）+ 逐条列表（优先级色条、标题、内容、时间、延期次数与最近一次记录）+ 编辑表单（标题 / 内容 / 日期 / 时间 `step=60` / 5 档优先级 / 删除 / 取消 / 保存）。
+- [x] **左下角箱子**：小屋主页左侧底部 📦 入口，角标显示未关闭数量（有过期时转红），点击弹出最近 3 条 + 「查看全部」。
+- [x] **提醒窗联动**：`todo-due` 进入到点态，显示标题 / 内容 / 截止时间 / P 档；「✓ 完成」关闭待办，5/10/30 分钟走 `todos_postpone` 并写入延期历史。
+- [x] **pet-reminder 技能**：`tools/add-reminder.py` 默认走 `/todos`（新建 / 查询 / 更新 / 关闭 / 重开 / 延期 / 删除，`--priority` 1–5），`--legacy` 保留旧 `/reminders`；SKILL.md 同步重写，并已复制到 `~/.claude/skills/pet-reminder/`。
+- [x] 面板技能说明文案改为「待办箱子」口径。
+- [ ] **待真人回归：待办 UI**——日历切月 / 点日期筛选、箱子气泡与「查看全部」跳转、编辑表单保存、延期内联菜单（+1 小时 / +1 天 / +7 天）需在安装版 `.app` 上点一遍（本轮已用 Playwright + Tauri 桩截图验证布局，接口用 curl 闭环）。
+- [x] **桌宠旁的待办箱子**：改成独立 60×60 透明小窗口（`todo-box.html`），贴桌宠右侧 8pt、底部对齐；监听 pet `Moved` 事件以 60ms 节流跟随；右侧放不下自动翻到左侧并夹在当前显示器内；角标为未关闭数量（有过期转红）；点击调用 `window_show_dashboard_todo` 打开小屋并落到待办页；小屋展开时箱子收起、关闭后回来。
+- [x] **箱子点击可靠性**：窗口加 `accept_first_mouse(true)`（否则非激活状态下首次点击只激活窗口、不进 WebView）；`default.json` capability 的 windows 补 `todo-box`，否则事件订阅/emit 被拒。
+- [x] **桌宠拖动不跟随修复**：原生 `startDragging()` 在这台 macOS 上只切拖拽姿态、窗口不动；改为 pointerdown 过阈值后调 `start_pet_drag`，Rust 后台线程用 `AppHandle::cursor_position()` 读全局光标、按物理增量 `set_position`，并夹在当前显示器内；pointerup 调 `end_pet_drag` 停止（10 秒兜底）。dev 合成拖动实测窗口 (1239,430) → (1154,362)，箱子跟随贴到右侧。
+- [x] **箱子间距可配置**：`settings.todoBoxGap`（点，默认 2，范围 0–40），小屋「⚙️ 设置」里用滑杆调，松手即写盘并调 `position_todo_box` 重排；箱子的贴边距离不再写死在 Rust。
+- [x] **小屋/提醒窗拖动失效修复**：dashboard 与 reminder 一直用的原生 `startDragging()` 在这台 macOS 上与桌宠同症状（按下不动）；复用桌宠的 Rust 跟随方案泛化为 `start_window_drag(window)` / `move_window(label,dx,dy)`，前端 `bindDrag` 改调 `startWindowDrag('dashboard'/'reminder')`，靠 `CGEventSourceButtonState` 松手自动停。release 安装版实测小屋拖动正常、桌宠拖动+箱子跟随不受影响（1.6.1 未提交）。
+- [x] **待真人回归：拖动手感**——用户已确认安装版小屋拖动正常。
+- [x] **高优先级删除保护**：P1/P2 在编辑表单点「删除」需再点一次确认（文案变「再点一次删除」，3 秒未确认自动复位）。
+- [x] 从 dashboard 内移除旧「左下角箱子」入口及其气泡/样式，避免与桌宠旁的箱子重复。
+- [ ] **待真人回归：提醒窗完成 / 延期**——点「✓ 完成」确认待办变 `closed`；点 5/10/30 确认 `dueAt` 顺延且 `postponements` 追加（WebView 不暴露 AX，自动化点击无法闭环）。
 
 ## 六、素材待确认
 
@@ -61,3 +80,4 @@
 
 - 素材处理 Node 脚本保留不迁（已确认接受）。
 - 旧 `.doubao-pet-builder.json` 为 Electron sha256 哈希契约，Tauri 发版门禁不适用；Tauri 路线门禁以 `cargo test` / `tsc --noEmit` / `vite build` / `cargo tauri build` 为准。
+- [x] **待办四 tab + 表格化排序 + 放弃理由**：状态 tab 改为 进行中/过期/已完成/放弃；列表改表格（优先级/标题/到期时间/创建时间），点表头排序（同列再点翻转方向），三个 tab 均显示所有日期条目（日历仅高亮不筛选）；Todo 新增 `abandoned` 状态与 `abandonReason` 字段，`todos_abandon(id, reason)`（理由 trim 非空才接受，HTTP `POST /todos/{id}/abandon`），放弃在行内 🚫 按钮弹理由输入，完成/放弃后重新打开会清空放弃理由。接口链路 curl 实测通过，UI 四 tab/表头截图确认（1.6.1 未提交）。

@@ -8,6 +8,7 @@ interface Window {
     };
     event: {
       listen<T = unknown>(channel: string, cb: (event: { payload: T }) => void): Promise<() => void>;
+      emit(event: string, payload?: unknown): Promise<void>;
     };
     window: {
       getCurrentWindow(): {

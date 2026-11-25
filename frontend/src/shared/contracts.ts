@@ -1,5 +1,7 @@
 export interface PetSpec {
   schemaVersion: number;
+  /** 素材透明留白比例：待办箱子贴边时按此收拢视觉间距 */
+  layout?: { trimRightRatio?: number; trimLeftRatio?: number };
   app: {
     name: string;
     appId: string;
@@ -121,6 +123,7 @@ export interface Settings {
   clickThrough: boolean;
   petScale: number;
   currentPet: string;
+  todoBoxGap: number;
 }
 
 export interface Reminder {
@@ -135,6 +138,50 @@ export interface Reminder {
 }
 
 export type RepeatRule = 'hourly' | 'daily' | 'weekdays' | 'weekly';
+
+/** 待办优先级：1 最高（红）→ 5 最低（蓝） */
+export type TodoPriority = 1 | 2 | 3 | 4 | 5;
+export type TodoStatus = 'open' | 'closed' | 'abandoned';
+
+/** 一次延期记录 */
+export interface Postponement {
+  from: string;
+  to: string;
+  at: string;
+  minutes: number;
+}
+
+export interface Todo {
+  id: string;
+  title: string;
+  content: string;
+  /** 精确到分的 ISO 时间 */
+  dueAt: string;
+  priority: TodoPriority;
+  status: TodoStatus;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string | null;
+  /** 放弃理由：仅 status = abandoned 时存在 */
+  abandonReason?: string | null;
+  postponements?: Postponement[];
+  /** reminder-migration 表示由旧提醒迁移而来 */
+  source?: string | null;
+}
+
+export interface TodoInput {
+  title: string;
+  content?: string;
+  dueAt: string;
+  priority?: TodoPriority;
+}
+
+export interface TodoPatch {
+  title?: string;
+  content?: string;
+  dueAt?: string;
+  priority?: TodoPriority;
+}
 
 export interface StateActivity {
   kind: string;
@@ -249,6 +296,16 @@ export interface PetAPI {
     remove: (id: string) => Promise<boolean>;
     snooze: (id: string, minutes: number) => Promise<void>;
   };
+  todos: {
+    list: () => Promise<Todo[]>;
+    create: (input: TodoInput) => Promise<Todo>;
+    update: (id: string, patch: TodoPatch) => Promise<Todo>;
+    close: (id: string) => Promise<boolean>;
+    reopen: (id: string) => Promise<boolean>;
+    abandon: (id: string, reason: string) => Promise<boolean>;
+    remove: (id: string) => Promise<boolean>;
+    postpone: (id: string, minutes: number) => Promise<Todo>;
+  };
   interactions: {
     list: () => Promise<InteractionSpec[]>;
     trigger: (id: string) => Promise<InteractionResult>;
@@ -260,6 +317,9 @@ export interface PetAPI {
     openPocket: () => Promise<void>;
   };
   window: {
+    moveBy: (dx: number, dy: number) => Promise<void>;
+    startDrag: () => Promise<void>;
+    startWindowDrag: (label: string) => Promise<void>;
     beginDrag: () => Promise<void>;
     updateDrag: () => Promise<void>;
     endDrag: () => Promise<void>;
@@ -293,6 +353,8 @@ export interface PetAPI {
     onPetChanged: (listener: (petId: string) => void) => () => void;
     onAnniversaryChanged: (listener: (status: AnniversaryStatus) => void) => () => void;
     onAgentTask: (listener: (event: AgentTaskEvent) => void) => () => void;
+    onTodosChanged: (listener: (todos: Todo[]) => void) => () => void;
+    onTodoDue: (listener: (payload: { todo: Todo; overdueDays: number }) => void) => () => void;
   };
   pets: {
     list: () => Promise<PetSummary[]>;

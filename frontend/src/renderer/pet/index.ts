@@ -324,9 +324,7 @@ container.addEventListener('click', () => {
 let isDragging = false;
 let pointerStart = { x: 0, y: 0 };
 let activePointerId: number | undefined;
-let dragUpdatePending = false;
 let suppressNextClick = false;
-let dragBegin: Promise<void> | undefined;
 
 container.addEventListener('pointerdown', (event) => {
   if (event.button !== 0 || activePointerId !== undefined) return;
@@ -340,22 +338,10 @@ container.addEventListener('pointermove', (event) => {
   if (!isDragging && exceedsDragThreshold(pointerStart, { x: event.clientX, y: event.clientY })) {
     isDragging = true;
     setState('drag');
-    dragBegin = window.petAPI?.window.beginDrag() ?? Promise.resolve();
+    // 原生 startDragging 在部分 macOS 上只换姿态、窗口不跟随；改由 Rust 侧跟随全局光标
+    void window.petAPI?.window.startDrag();
+    return;
   }
-  if (!isDragging) return;
-  if (dragUpdatePending) return;
-  dragUpdatePending = true;
-  requestAnimationFrame(() => {
-    void (dragBegin ?? Promise.resolve())
-      .then(() => {
-        // 放下后（isDragging=false）不再续期悬空姿态，避免拖拽结束残留
-        if (!isDragging) return;
-        setState('drag');
-        return window.petAPI?.window.updateDrag();
-      })
-      .catch(() => {})
-      .finally(() => { dragUpdatePending = false; });
-  });
 });
 
 function finishPointer(event: PointerEvent): void {
@@ -364,15 +350,11 @@ function finishPointer(event: PointerEvent): void {
   activePointerId = undefined;
   const dragged = isDragging;
   isDragging = false;
-  dragUpdatePending = false;
   if (dragged) {
     suppressNextClick = true;
     setState('idle');
-    void (dragBegin ?? Promise.resolve())
-      .then(() => window.petAPI?.window.endDrag())
-      .catch(() => {});
+    void window.petAPI?.window.endDrag();
   }
-  dragBegin = undefined;
 }
 
 container.addEventListener('pointerup', finishPointer);
@@ -449,7 +431,11 @@ async function init(): Promise<void> {
       container.dataset.state = stateMachine.currentStateId();
     }
     // 所有运行素材必须真实解码成功后才能报告 ready。
-    const expectedAssets = [...new Set([petSpec.character.coreAsset, ...petSpec.states.flatMap((state) => state.frames)])];
+    // core-ip 母版只保留在 assets-original，不参与运行时渲染；无运行时映射时跳过校验。
+    const expectedAssets = [...new Set([
+      ...petSpec.states.flatMap((state) => state.frames),
+      petSpec.character.coreAsset,
+    ])].filter((name) => Boolean(frameUrl(name)));
     const loadedAssets = await Promise.all(expectedAssets.map((name) => new Promise<HTMLImageElement>((resolve, reject) => {
       const url = frameUrl(name);
       if (!url) {

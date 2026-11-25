@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>待办箱子</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, 'PingFang SC', sans-serif;
+      }
+      #todo-box {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 120ms ease;
+      }
+      #todo-box:hover {
+        transform: translateY(-2px) scale(1.08);
+      }
+      .icon {
+        font-size: 32px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+      }
+      .badge {
+        position: fixed;
+        top: 1px;
+        right: 1px;
+        min-width: 17px;
+        height: 17px;
+        padding: 0 4px;
+        box-sizing: border-box;
+        border-radius: 9px;
+        background: #ff8a24;
+        color: #fff;
+        font-size: 11px;
+        line-height: 17px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      .badge[hidden] {
+        display: none;
+      }
+      .badge.alert {
+        background: #e5484d;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="todo-box" title="待办箱子">
+      <span class="icon">📦</span>
+      <span class="badge" id="todo-box-badge" hidden>0</span>
+    </button>
+    <script type="module" src="/frontend/src/api.ts"></script>
+    <script type="module" src="/frontend/src/renderer/todo-box/index.ts"></script>
+  </body>
+</html>

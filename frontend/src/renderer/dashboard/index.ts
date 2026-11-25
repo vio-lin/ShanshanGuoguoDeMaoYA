@@ -1,4 +1,4 @@
-import type { Anniversary, AnniversaryStatus, PetSpec, PetStats, Settings, InteractionSpec, UpdateInfo } from '../../shared/contracts';
+import type { Anniversary, AnniversaryStatus, PetSpec, PetStats, Settings, InteractionSpec, Todo, TodoPriority, UpdateInfo } from '../../shared/contracts';
 import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import './index.css';
 
@@ -26,8 +26,8 @@ const closeBtn = document.getElementById('close-btn') as HTMLButtonElement;
 function bindDrag(el: HTMLElement | null): void {
   if (!el) return;
   el.addEventListener('mousedown', (e) => {
-    if ((e.target as HTMLElement).closest('button, input, select, a, textarea, .toggle, .size-selector')) return;
-    void window.petAPI?.window.beginDrag();
+    if ((e.target as HTMLElement).closest('button, input, select, a, textarea, .toggle, .size-selector, .gap-control')) return;
+    void window.petAPI?.window.startWindowDrag('dashboard');
   });
 }
 bindDrag(document.querySelector('.card'));
@@ -40,6 +40,8 @@ const toggleAlwaysOnTop = document.getElementById('toggle-always-on-top') as HTM
 const toggleClickThrough = document.getElementById('toggle-click-through') as HTMLDivElement;
 const toggleAutostart = document.getElementById('toggle-autostart') as HTMLDivElement;
 const sizeSelector = document.getElementById('size-selector') as HTMLDivElement;
+const todoBoxGapInput = document.getElementById('todo-box-gap') as HTMLInputElement;
+const todoBoxGapValue = document.getElementById('todo-box-gap-value') as HTMLSpanElement;
 
 let currentSettings: Settings | null = null;
 
@@ -103,6 +105,11 @@ async function loadSettings(): Promise<void> {
     } catch (error) {
       console.error('Failed to read autostart state:', error);
     }
+
+    // 箱子间距
+    const gap = Number.isFinite(settings.todoBoxGap) ? settings.todoBoxGap : 2;
+    todoBoxGapInput.value = String(gap);
+    todoBoxGapValue.textContent = String(gap);
 
     // 更新大小选择
     const sizeBtns = sizeSelector.querySelectorAll('.size-btn');
@@ -190,6 +197,21 @@ toggleAutostart.addEventListener('click', async () => {
     }
   } catch (error) {
     console.error('Failed to update autostart:', error);
+  }
+});
+
+// 箱子间距：拖动时先更新数值，松手后落盘并移动箱子
+todoBoxGapInput.addEventListener('input', () => {
+  todoBoxGapValue.textContent = todoBoxGapInput.value;
+});
+todoBoxGapInput.addEventListener('change', async () => {
+  if (!currentSettings) return;
+  const gap = Number(todoBoxGapInput.value);
+  try {
+    await window.petAPI?.settings.update({ todoBoxGap: gap });
+    currentSettings.todoBoxGap = gap;
+  } catch (error) {
+    console.error('Failed to update todo box gap:', error);
   }
 });
 
@@ -450,6 +472,18 @@ function setupTabs(): void {
 // 版本更新日志
 const CHANGELOG = [
   {
+    version: '1.7.0',
+    date: '2026-11-25',
+    changes: [
+      '🐭 修复 macOS 上窗口拖动不跟随：小屋 / 提醒窗改用与桌宠一致的原生跟随方案，松手即停',
+      '📝 待办改版：进行中/过期/已完成/放弃四个 tab，全部显示所有日期条目',
+      '📊 待办列表表格化：优先级 / 到期时间 / 创建时间三列，点表头排序',
+      '🚫 新增「放弃」状态：必须填写放弃理由，完成/放弃后可重新打开',
+      '📦 待办箱子透明化 + 素材留白补偿，视觉上紧贴桌宠；角标数字不再被窗口边缘裁切',
+      '⏰ 过期提示改为相对时长（已过期 X 分钟 / 小时 / 天）',
+    ],
+  },
+  {
     version: '1.6.1',
     date: '2026-11',
     changes: ['📦 动画帧改用 256 色量化 PNG，安装包体积约减半（画质肉眼无差）', '🗂 102 张 512×512 无损母版完整保留在仓库 assets-original/', '🐛 修复 pet-spec 版本号与 package 长期不一致；素材校验区分运行时帧与母版'],
@@ -542,83 +576,521 @@ function renderChangelog(): void {
   }
 }
 
-// 待办列表
-async function loadTodos(): Promise<void> {
+// ---------- 待办 ----------
+const TODO_COLORS: string[] = ['#E5484D', '#F76B15', '#F5D90A', '#30A46C', '#0091FF'];
+type TodoView = 'active' | 'overdue' | 'done' | 'abandoned';
+type TodoSortKey = 'priority' | 'dueAt' | 'createdAt';
+
+let todoItems: Todo[] = [];
+let todoMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let todoSelectedDate: string | null = null;
+let todoView: TodoView = 'active';
+/** 表格排序：key + 方向；点击表头切换 */
+let todoSortKey: TodoSortKey = 'dueAt';
+let todoSortDir: 'asc' | 'desc' = 'asc';
+let todoEditingId: string | null = null;
+let todoEditPriority: TodoPriority = 3;
+/** 删除二次确认：高优先级（P1/P2）第一次点击只进入待确认态 */
+let todoDeleteArmed = false;
+let todoDeleteTimer: number | undefined;
+
+function pad2(n: number): string {
+  return `${n}`.padStart(2, '0');
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function todoColor(priority: number): string {
+  return TODO_COLORS[Math.min(Math.max(priority, 1), 5) - 1] ?? '#F5D90A';
+}
+
+function formatTodoTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  if (dateKey(d) === dateKey(now)) return `今天 ${hm}`;
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (dateKey(d) === dateKey(tomorrow)) return `明天 ${hm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+}
+
+function todoBuckets(): { active: Todo[]; overdue: Todo[]; done: Todo[]; abandoned: Todo[] } {
+  const now = Date.now();
+  const active: Todo[] = [];
+  const overdue: Todo[] = [];
+  const done: Todo[] = [];
+  const abandoned: Todo[] = [];
+  for (const t of todoItems) {
+    if (t.status === 'abandoned') abandoned.push(t);
+    else if (t.status === 'closed') done.push(t);
+    else if (new Date(t.dueAt).getTime() < now) overdue.push(t);
+    else active.push(t);
+  }
+  active.sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  overdue.sort((a, b) => new Date(b.dueAt).getTime() - new Date(a.dueAt).getTime());
+  done.sort((a, b) => new Date(b.closedAt ?? b.updatedAt).getTime() - new Date(a.closedAt ?? a.updatedAt).getTime());
+  abandoned.sort((a, b) => new Date(b.closedAt ?? b.updatedAt).getTime() - new Date(a.closedAt ?? a.updatedAt).getTime());
+  return { active, overdue, done, abandoned };
+}
+
+/** 点击表头按 key 排序：同 key 翻转方向，新 key 默认升序 */
+function setTodoSort(key: TodoSortKey): void {
+  if (todoSortKey === key) {
+    todoSortDir = todoSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    todoSortKey = key;
+    todoSortDir = 'asc';
+  }
+  renderTodoList();
+}
+
+function sortTodoItems(items: Todo[]): Todo[] {
+  const dir = todoSortDir === 'asc' ? 1 : -1;
+  const cmp: Record<TodoSortKey, (a: Todo, b: Todo) => number> = {
+    priority: (a, b) => a.priority - b.priority,
+    dueAt: (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime(),
+    createdAt: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  };
+  return [...items].sort((a, b) => cmp[todoSortKey]!(a, b) * dir);
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440} 天`;
+  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} 小时`;
+  return `${minutes} 分钟`;
+}
+
+/** 过期时长：分钟 → 小时 → 天（向上取整），例：已过期 3 小时 */
+function formatOverdueDuration(dueAt: string): string {
+  const diffMs = Date.now() - new Date(dueAt).getTime();
+  const minutes = Math.max(1, Math.ceil(diffMs / 60000));
+  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 1440) return `${Math.ceil(minutes / 60)} 小时`;
+  return `${Math.ceil(minutes / 1440)} 天`;
+}
+
+function renderTodoCalendar(): void {
+  const titleEl = document.getElementById('todo-cal-title');
+  const daysEl = document.getElementById('todo-cal-days');
+  if (!titleEl || !daysEl) return;
+  const year = todoMonth.getFullYear();
+  const month = todoMonth.getMonth();
+  titleEl.textContent = `${year}年${month + 1}月`;
+  daysEl.replaceChildren();
+
+  const counts = new Map<string, Todo[]>();
+  for (const t of todoItems) {
+    if (t.status === 'closed') continue;
+    const key = dateKey(new Date(t.dueAt));
+    const list = counts.get(key) ?? [];
+    list.push(t);
+    counts.set(key, list);
+  }
+
+  const startOffset = new Date(year, month, 1).getDay(); // 周日开头
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const total = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+  const todayKey = dateKey(new Date());
+
+  for (let i = 0; i < total; i += 1) {
+    const dayNumber = i - startOffset + 1;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (dayNumber < 1 || dayNumber > daysInMonth) {
+      cell.classList.add('other-month');
+      cell.textContent = `${new Date(year, month, dayNumber).getDate()}`;
+      daysEl.appendChild(cell);
+      continue;
+    }
+    const date = new Date(year, month, dayNumber);
+    const key = dateKey(date);
+    cell.classList.add('todo-day');
+    if (key === todayKey) cell.classList.add('today');
+    if (key === todoSelectedDate) cell.classList.add('selected');
+    cell.textContent = `${dayNumber}`;
+    const list = counts.get(key);
+    if (list && list.length) {
+      cell.classList.add('has-event');
+      const dots = document.createElement('div');
+      dots.className = 'todo-dots';
+      for (const t of [...list].sort((a, b) => a.priority - b.priority).slice(0, 3)) {
+        const dot = document.createElement('span');
+        dot.className = 'todo-dot';
+        dot.style.background = todoColor(t.priority);
+        dots.appendChild(dot);
+      }
+      cell.appendChild(dots);
+    }
+    cell.addEventListener('click', () => {
+      todoSelectedDate = todoSelectedDate === key ? null : key;
+      renderTodoCalendar();
+      renderTodoList();
+    });
+    daysEl.appendChild(cell);
+  }
+}
+
+function renderTodoList(): void {
   const listEl = document.getElementById('todo-list');
   const emptyEl = document.getElementById('todo-empty');
-  const clearBtn = document.getElementById('todo-clear-expired') as HTMLButtonElement | null;
   if (!listEl || !emptyEl) return;
-  const refresh = async (): Promise<void> => {
-    const reminders = await window.petAPI?.reminders.list();
-    listEl.replaceChildren();
-    const now = new Date();
-    const expired = (reminders ?? []).filter((r) => !r.repeat && new Date(r.dueAt) < now);
-    if (clearBtn) clearBtn.disabled = expired.length === 0;
-    if (!reminders || reminders.length === 0) {
-      emptyEl.style.display = 'block';
+  const buckets = todoBuckets();
+  const counts: Record<TodoView, number> = {
+    active: buckets.active.length,
+    overdue: buckets.overdue.length,
+    done: buckets.done.length,
+    abandoned: buckets.abandoned.length,
+  };
+  const countEls: Record<TodoView, string | null> = {
+    active: 'todo-count-active',
+    overdue: 'todo-count-overdue',
+    done: 'todo-count-done',
+    abandoned: 'todo-count-abandoned',
+  };
+  (Object.keys(counts) as TodoView[]).forEach((view) => {
+    const el = document.getElementById(countEls[view]!);
+    if (el) el.textContent = `${counts[view]}`;
+  });
+
+  // 所有 tab 均显示所有日期的条目；日历点选仅作高亮不筛选
+  let items = buckets[todoView];
+
+  // 表头（排序）
+  const header = document.createElement('div');
+  header.className = 'todo-table-head';
+  const sortArrow = (key: TodoSortKey): string =>
+    todoSortKey === key ? (todoSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const addSortCol = (label: string, key: TodoSortKey, cls: string): void => {
+    const col = document.createElement('div');
+    col.className = `todo-col ${cls}`;
+    col.textContent = `${label}${sortArrow(key)}`;
+    col.addEventListener('click', () => setTodoSort(key));
+    header.appendChild(col);
+  };
+  addSortCol('优先级', 'priority', 'col-priority');
+  const titleCol = document.createElement('div');
+  titleCol.className = 'todo-col col-title';
+  titleCol.textContent = '标题';
+  header.appendChild(titleCol);
+  addSortCol('到期时间', 'dueAt', 'col-due');
+  addSortCol('创建时间', 'createdAt', 'col-created');
+  const opCol = document.createElement('div');
+  opCol.className = 'todo-col col-actions';
+  opCol.textContent = '操作';
+  header.appendChild(opCol);
+  listEl.replaceChildren(header);
+
+  emptyEl.style.display = items.length ? 'none' : 'block';
+  emptyEl.textContent = '暂无待办';
+  if (!items.length) return;
+
+  for (const t of sortTodoItems(items)) {
+    const row = document.createElement('div');
+    row.className = `todo-item${t.status !== 'open' ? ' closed' : ''}`;
+
+    const bar = document.createElement('div');
+    bar.className = 'todo-bar';
+    bar.style.background = todoColor(t.priority);
+
+    const priorityCol = document.createElement('div');
+    priorityCol.className = 'todo-col col-priority';
+    const prioTag = document.createElement('span');
+    prioTag.className = `todo-prio prio-${t.priority}`;
+    prioTag.textContent = `P${t.priority}`;
+    prioTag.title = '优先级';
+    priorityCol.appendChild(prioTag);
+
+    const body = document.createElement('div');
+    body.className = 'todo-body col-title';
+    const title = document.createElement('div');
+    title.className = 'todo-title';
+    title.textContent = t.title;
+    body.appendChild(title);
+
+    if (t.content) {
+      const content = document.createElement('div');
+      content.className = 'todo-content';
+      content.textContent = t.content;
+      body.appendChild(content);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'todo-meta';
+    const overdue = t.status === 'open' && new Date(t.dueAt).getTime() < Date.now();
+    const due = document.createElement('span');
+    if (overdue) due.className = 'overdue';
+    due.textContent = `${overdue ? `⚠ 已过期 ${formatOverdueDuration(t.dueAt)}` : `⏰ ${formatTodoTime(t.dueAt)}`}`;
+    meta.appendChild(due);
+    if (t.status === 'abandoned' && t.abandonReason) {
+      const abandonTag = document.createElement('span');
+      abandonTag.className = 'abandon-reason';
+      abandonTag.textContent = `🚫 放弃：${t.abandonReason}`;
+      meta.appendChild(abandonTag);
+    }
+    if (t.postponements && t.postponements.length) {
+      const postponeTag = document.createElement('span');
+      postponeTag.textContent = `↷ 延期 ${t.postponements.length} 次`;
+      meta.appendChild(postponeTag);
+    }
+    body.appendChild(meta);
+
+    if (t.postponements && t.postponements.length) {
+      const history = document.createElement('div');
+      history.className = 'todo-history';
+      const last = t.postponements[t.postponements.length - 1]!;
+      history.textContent = `最近一次：${formatTodoTime(last.from)} → ${formatTodoTime(last.to)}（${formatMinutes(last.minutes)}）`;
+      body.appendChild(history);
+    }
+
+    body.addEventListener('click', () => openTodoEditor(t.id));
+
+    const dueCol = document.createElement('div');
+    dueCol.className = 'todo-col col-due';
+    dueCol.textContent = formatTodoTime(t.dueAt);
+    if (overdue) dueCol.classList.add('overdue');
+
+    const createdCol = document.createElement('div');
+    createdCol.className = 'todo-col col-created';
+    createdCol.textContent = formatTodoTime(t.createdAt);
+    createdCol.title = t.createdAt;
+
+    const actions = document.createElement('div');
+    actions.className = 'todo-actions col-actions';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'todo-action';
+    toggleBtn.title = t.status === 'open' ? '标记完成' : '重新打开';
+    toggleBtn.textContent = t.status === 'open' ? '✓' : '↩';
+    toggleBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (t.status === 'open') await window.petAPI?.todos.close(t.id);
+      else await window.petAPI?.todos.reopen(t.id);
+      await loadTodos();
+    });
+    actions.appendChild(toggleBtn);
+
+    if (t.status === 'open') {
+      const postponeBtn = document.createElement('button');
+      postponeBtn.className = 'todo-action';
+      postponeBtn.title = '延期';
+      postponeBtn.textContent = '↷';
+      const menu = document.createElement('div');
+      menu.className = 'todo-postpone-menu';
+      menu.hidden = true;
+      const options: Array<[string, number]> = [['+1 小时', 60], ['+1 天', 1440], ['+7 天', 10080]];
+      for (const [label, minutes] of options) {
+        const optionBtn = document.createElement('button');
+        optionBtn.className = 'todo-postpone-btn';
+        optionBtn.textContent = label;
+        optionBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await window.petAPI?.todos.postpone(t.id, minutes);
+          await loadTodos();
+        });
+        menu.appendChild(optionBtn);
+      }
+      postponeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+      });
+      actions.append(postponeBtn, menu);
+    }
+
+    if (t.status === 'open') {
+      const abandonBtn = document.createElement('button');
+      abandonBtn.className = 'todo-action';
+      abandonBtn.title = '放弃（需填写理由）';
+      abandonBtn.textContent = '🚫';
+      const abandonMenu = document.createElement('div');
+      abandonMenu.className = 'todo-postpone-menu todo-abandon-menu';
+      abandonMenu.hidden = true;
+      const reasonInput = document.createElement('input');
+      reasonInput.type = 'text';
+      reasonInput.className = 'todo-abandon-input';
+      reasonInput.placeholder = '放弃理由（必填）';
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'todo-postpone-btn';
+      confirmBtn.textContent = '确认放弃';
+      confirmBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const reason = reasonInput.value.trim();
+        if (!reason) {
+          reasonInput.focus();
+          return;
+        }
+        abandonMenu.hidden = true;
+        await window.petAPI?.todos.abandon(t.id, reason);
+        await loadTodos();
+      });
+      abandonMenu.append(reasonInput, confirmBtn);
+      abandonBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abandonMenu.hidden = !abandonMenu.hidden;
+        if (!abandonMenu.hidden) reasonInput.focus();
+      });
+      actions.append(abandonBtn, abandonMenu);
+    }
+
+    row.append(bar, priorityCol, body, dueCol, createdCol, actions);
+    listEl.appendChild(row);
+  }
+}
+
+function renderPriorityPicker(): void {
+  const picker = document.getElementById('todo-editor-priority');
+  if (!picker) return;
+  picker.replaceChildren();
+  for (let p = 1; p <= 5; p += 1) {
+    const dot = document.createElement('button');
+    dot.className = `todo-priority-dot${p === todoEditPriority ? ' active' : ''}`;
+    dot.style.background = todoColor(p);
+    dot.title = `P${p}`;
+    dot.addEventListener('click', () => {
+      todoEditPriority = p as TodoPriority;
+      renderPriorityPicker();
+    });
+    picker.appendChild(dot);
+  }
+}
+
+function openTodoEditor(id: string | null): void {
+  const editor = document.getElementById('todo-editor') as HTMLDivElement | null;
+  const titleEl = document.getElementById('todo-editor-title') as HTMLInputElement | null;
+  const contentEl = document.getElementById('todo-editor-content') as HTMLTextAreaElement | null;
+  const dateEl = document.getElementById('todo-editor-date') as HTMLInputElement | null;
+  const timeEl = document.getElementById('todo-editor-time') as HTMLInputElement | null;
+  const deleteBtn = document.getElementById('todo-editor-delete') as HTMLButtonElement | null;
+  if (!editor || !titleEl || !contentEl || !dateEl || !timeEl) return;
+
+  const item = id ? todoItems.find((t) => t.id === id) ?? null : null;
+  todoEditingId = item?.id ?? null;
+  // 每次打开编辑器都重置删除二次确认状态
+  todoDeleteArmed = false;
+  if (todoDeleteTimer !== undefined) window.clearTimeout(todoDeleteTimer);
+  if (deleteBtn) deleteBtn.textContent = '删除';
+  if (item) {
+    const due = new Date(item.dueAt);
+    titleEl.value = item.title;
+    contentEl.value = item.content;
+    dateEl.value = dateKey(due);
+    timeEl.value = `${pad2(due.getHours())}:${pad2(due.getMinutes())}`;
+    todoEditPriority = item.priority;
+    if (deleteBtn) deleteBtn.hidden = false;
+  } else {
+    const base = todoSelectedDate ? new Date(`${todoSelectedDate}T00:00:00`) : new Date();
+    const hour = todoSelectedDate ? 9 : Math.min(base.getHours() + 1, 23);
+    titleEl.value = '';
+    contentEl.value = '';
+    dateEl.value = dateKey(base);
+    timeEl.value = `${pad2(hour)}:00`;
+    todoEditPriority = 3;
+    if (deleteBtn) deleteBtn.hidden = true;
+  }
+  renderPriorityPicker();
+  editor.hidden = false;
+  titleEl.focus();
+  window.setTimeout(() => editor.scrollIntoView({ block: 'end', behavior: 'smooth' }), 50);
+}
+
+function closeTodoEditor(): void {
+  const editor = document.getElementById('todo-editor') as HTMLDivElement | null;
+  if (editor) editor.hidden = true;
+  todoEditingId = null;
+}
+
+async function saveTodo(): Promise<void> {
+  const titleEl = document.getElementById('todo-editor-title') as HTMLInputElement | null;
+  const contentEl = document.getElementById('todo-editor-content') as HTMLTextAreaElement | null;
+  const dateEl = document.getElementById('todo-editor-date') as HTMLInputElement | null;
+  const timeEl = document.getElementById('todo-editor-time') as HTMLInputElement | null;
+  if (!titleEl || !contentEl || !dateEl || !timeEl) return;
+  const title = titleEl.value.trim();
+  if (!title) {
+    titleEl.focus();
+    return;
+  }
+  const due = new Date(`${dateEl.value}T${timeEl.value || '09:00'}:00`);
+  if (Number.isNaN(due.getTime())) return;
+  const payload = {
+    title,
+    content: contentEl.value.trim(),
+    dueAt: due.toISOString(),
+    priority: todoEditPriority,
+  };
+  if (todoEditingId) await window.petAPI?.todos.update(todoEditingId, payload);
+  else await window.petAPI?.todos.create(payload);
+  closeTodoEditor();
+  await loadTodos();
+}
+
+function switchToTab(tab: string): void {
+  const btn = document.querySelector<HTMLElement>(`.tab-btn[data-tab="${tab}"]`);
+  btn?.click();
+}
+
+function bindTodoUI(): void {
+  document.getElementById('todo-new-btn')?.addEventListener('click', () => openTodoEditor(null));
+  document.getElementById('todo-editor-cancel')?.addEventListener('click', closeTodoEditor);
+  document.getElementById('todo-editor-save')?.addEventListener('click', () => void saveTodo());
+  const deleteBtnEl = document.getElementById('todo-editor-delete') as HTMLButtonElement | null;
+  deleteBtnEl?.addEventListener('click', async () => {
+    if (!todoEditingId) return;
+    const target = todoItems.find((t) => t.id === todoEditingId);
+    // P1/P2 是长期跟进的重点，删除要再点一次确认；点「完成」只关闭、不删记录
+    if (target && target.priority <= 2 && !todoDeleteArmed) {
+      todoDeleteArmed = true;
+      deleteBtnEl.textContent = '再点一次删除';
+      todoDeleteTimer = window.setTimeout(() => {
+        todoDeleteArmed = false;
+        deleteBtnEl.textContent = '删除';
+      }, 3000);
       return;
     }
-    emptyEl.style.display = 'none';
-    for (const r of reminders) {
-      const row = document.createElement('div');
-      row.className = 'changelog-item';
-      const verRow = document.createElement('div');
-      verRow.className = 'ver-row';
-      const text = document.createElement('span');
-      text.className = 'ver';
-      text.textContent = r.text;
-      const delBtn = document.createElement('button');
-      delBtn.className = 'update-btn';
-      delBtn.style.padding = '4px 10px';
-      delBtn.style.fontSize = '12px';
-      delBtn.textContent = '删除';
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try {
-          await window.petAPI?.reminders.remove(r.id);
-          await refresh();
-        } catch (err) {
-          console.error('Failed to remove reminder:', err);
-        }
-      });
-      verRow.append(text, delBtn);
-      const time = document.createElement('div');
-      time.className = 'date';
-      time.style.marginTop = '4px';
-      const due = new Date(r.dueAt);
-      const overdue = due < now;
-      const leadTxt = typeof r.leadMinutes === 'number' && r.leadMinutes > 0 ? ` · 提前 ${r.leadMinutes} 分钟` : '';
-      const repeatTxt =
-        r.repeat === 'hourly'
-          ? ' · 每小时'
-          : r.repeat === 'daily'
-            ? ' · 每天'
-            : r.repeat === 'weekdays'
-              ? ' · 工作日'
-              : r.repeat === 'weekly'
-                ? ' · 每周'
-                : '';
-      const dueText = `${due.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${leadTxt}${repeatTxt}`;
-      time.textContent = `${overdue && !r.repeat ? '⚠️ 已过期 · ' : '⏰ '}${dueText}`;
-      row.append(verRow, time);
-      listEl.appendChild(row);
-    }
-  };
-  clearBtn?.addEventListener('click', async () => {
-    const reminders = await window.petAPI?.reminders.list();
-    const now = new Date();
-    const expired = (reminders ?? []).filter((r) => !r.repeat && new Date(r.dueAt) < now);
-    if (clearBtn) clearBtn.disabled = true;
-    for (const r of expired) {
-      try {
-        await window.petAPI?.reminders.remove(r.id);
-      } catch (err) {
-        console.error('Failed to remove reminder:', err);
-      }
-    }
-    await refresh();
+    if (todoDeleteTimer !== undefined) window.clearTimeout(todoDeleteTimer);
+    todoDeleteArmed = false;
+    await window.petAPI?.todos.remove(todoEditingId);
+    closeTodoEditor();
+    await loadTodos();
   });
-  await refresh();
+
+  const navButtons: Array<[string, number]> = [['todo-cal-prev', -1], ['todo-cal-next', 1]];
+  for (const [id, delta] of navButtons) {
+    document.getElementById(id)?.addEventListener('click', () => {
+      todoMonth = new Date(todoMonth.getFullYear(), todoMonth.getMonth() + delta, 1);
+      renderTodoCalendar();
+    });
+  }
+  document.getElementById('todo-cal-today')?.addEventListener('click', () => {
+    const now = new Date();
+    todoMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    todoSelectedDate = dateKey(now);
+    renderTodoCalendar();
+    renderTodoList();
+  });
+
+  const tabsEl = document.getElementById('todo-status-tabs');
+  tabsEl?.querySelectorAll<HTMLElement>('.todo-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      todoView = (btn.dataset.status as TodoView) ?? 'active';
+      tabsEl.querySelectorAll('.todo-tab').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTodoList();
+    });
+  });
+
+  window.petAPI?.events.onTodosChanged((todos) => {
+    todoItems = todos;
+    renderTodoCalendar();
+    renderTodoList();
+  });
+}
+
+async function loadTodos(): Promise<void> {
+  todoItems = (await window.petAPI?.todos.list()) ?? [];
+  renderTodoCalendar();
+  renderTodoList();
 }
 
 // Claude 技能（pet-reminder）
@@ -686,6 +1158,9 @@ function setupSkillPanel(): void {
 // 初始化
 async function init(): Promise<void> {
   setupTabs();
+  bindTodoUI();
+  // 桌宠旁的箱子点击后打开小屋，直接落到待办页
+  window.__TAURI__?.event.listen('todo-box-open', () => switchToTab('todo'));
   renderChangelog();
   await loadTodos();
   const settings = await window.petAPI?.settings.get();

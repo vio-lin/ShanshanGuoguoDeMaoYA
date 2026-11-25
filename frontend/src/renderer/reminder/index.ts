@@ -1,4 +1,4 @@
-import type { PetSpec, Reminder, RepeatRule } from '../../shared/contracts';
+import type { PetSpec, Reminder, RepeatRule, Todo } from '../../shared/contracts';
 import { getPetProfile, PET_PROFILES } from '../../pet-profiles';
 import './index.css';
 
@@ -35,13 +35,17 @@ const cardTitle = document.getElementById('card-title') as HTMLElement;
 const dueText = document.getElementById('due-text') as HTMLElement;
 const dueTime = document.getElementById('due-time') as HTMLElement;
 const dismissBtn = document.getElementById('dismiss-btn') as HTMLButtonElement;
+const completeBtn = document.getElementById('complete-btn') as HTMLButtonElement;
 
 /** 当前到点提醒 id（用于稍后提醒） */
 let dueId: string | null = null;
+/** 到点对象类型：旧提醒 or 待办 */
+let dueKind: 'reminder' | 'todo' = 'reminder';
 
 /** 编辑模式：新建提醒 */
 function showCompose(): void {
   dueId = null;
+  dueKind = 'reminder';
   composePanel.style.display = 'block';
   duePanel.style.display = 'none';
   cardTitle.textContent = '⏰ 添加提醒';
@@ -50,6 +54,8 @@ function showCompose(): void {
 /** 到点模式：展示提醒内容与稍后提醒入口 */
 function showDue(reminder: Reminder): void {
   dueId = reminder.id;
+  dueKind = 'reminder';
+  completeBtn.style.display = 'none';
   composePanel.style.display = 'none';
   duePanel.style.display = 'block';
   cardTitle.textContent = '⏰ 到点提醒';
@@ -72,11 +78,28 @@ function showDue(reminder: Reminder): void {
   })}${repeatTxt}`;
 }
 
+/** 待办到点/过期模式：可完成或延期（延期会被记录进历史） */
+function showDueTodo(todo: Todo, overdueDays: number): void {
+  dueId = todo.id;
+  dueKind = 'todo';
+  completeBtn.style.display = 'block';
+  composePanel.style.display = 'none';
+  duePanel.style.display = 'block';
+  cardTitle.textContent = overdueDays > 0 ? `📌 待办已过期 ${overdueDays} 天` : '📌 待办提醒';
+  dueText.textContent = todo.content ? `${todo.title}\n${todo.content}` : todo.title;
+  dueTime.textContent = `截止 ${new Date(todo.dueAt).toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })} · P${todo.priority}`;
+}
+
 // 卡片区域按下时拖动整个提醒窗（按钮/输入框/下拉不触发）
 const dragCard = document.querySelector<HTMLElement>('.card');
 dragCard?.addEventListener('mousedown', (e) => {
   if ((e.target as HTMLElement).closest('button, input, select, a, textarea')) return;
-  void window.petAPI?.window.beginDrag();
+  void window.petAPI?.window.startWindowDrag('reminder');
 });
 
 // 设置默认时间为当前时间
@@ -116,18 +139,37 @@ saveBtn.addEventListener('click', async () => {
   }
 });
 
-// 稍后提醒：一次性顺延，重复提醒由后端另建一次性副本
+// 稍后提醒：一次性顺延，重复提醒由后端另建一次性副本；待办走延期并记录历史
 document.querySelectorAll<HTMLButtonElement>('.snooze-row button').forEach((btn) => {
   btn.addEventListener('click', async () => {
     if (!dueId) return;
     const minutes = Number(btn.dataset.minutes ?? 10);
     try {
+      if (dueKind === 'todo') {
+        await window.petAPI?.todos.postpone(dueId, minutes);
+        showCompose();
+        await window.petAPI?.window.hideReminder();
+        return;
+      }
       await window.petAPI?.reminders.snooze(dueId, minutes);
       showCompose();
     } catch (error) {
       console.error('Failed to snooze reminder:', error);
     }
   });
+});
+
+// 待办完成：直接关闭该待办
+completeBtn.addEventListener('click', async () => {
+  if (dueId && dueKind === 'todo') {
+    try {
+      await window.petAPI?.todos.close(dueId);
+    } catch (error) {
+      console.error('Failed to close todo:', error);
+    }
+  }
+  showCompose();
+  await window.petAPI?.window.hideReminder();
 });
 
 // 知道了：关闭提醒窗（重复提醒的下一次已由后端排好）
@@ -148,6 +190,11 @@ cancelBtn.addEventListener('click', async () => {
 // 监听提醒触发：切换到到点模式（展示稍后提醒）
 window.petAPI?.events.onReminder((reminder: Reminder) => {
   showDue(reminder);
+});
+
+// 监听待办到点 / 过期提醒
+window.petAPI?.events.onTodoDue(({ todo, overdueDays }) => {
+  showDueTodo(todo, overdueDays);
 });
 
 // 监听打开提醒编辑器：回到新建模式

@@ -181,6 +181,21 @@
       border-color: var(--primary, #ff8a24);
       color: white;
     }
+    .gap-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gap-control input[type="range"] {
+      width: 110px;
+      accent-color: var(--primary, #ff8a24);
+    }
+    .gap-value {
+      min-width: 22px;
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-secondary, #8a7666);
+    }
     .close-btn {
       position: absolute;
       top: 16px;
@@ -421,6 +436,97 @@
       font-size: 12px;
       cursor: pointer;
     }
+    /* 待办：日历标记 / 三栏 / 列表 / 编辑 */
+    #todo-calendar { padding: 12px; }
+    #todo-calendar .calendar-days { gap: 3px; }
+    #todo-calendar .cal-day {
+      aspect-ratio: auto; height: 38px; border-radius: 8px; font-size: 12px;
+    }
+    #todo-calendar .cal-day.has-event.today { background: var(--primary, #ff8a24); color: #fff; }
+    #todo-calendar .cal-day.has-event.today .todo-dot { box-shadow: 0 0 0 1px #fff; }
+    .todo-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .cal-day.todo-day { cursor: pointer; }
+    .cal-day.todo-day:hover { background: #ffeedd; }
+    .cal-day.selected { outline: 2px solid var(--accent, #ffc987); outline-offset: -2px; }
+    .todo-dots { display: flex; gap: 2px; margin-top: 3px; height: 6px; align-items: center; }
+    .todo-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+    .todo-tabs { display: flex; gap: 6px; margin: 12px 0 10px; }
+    .todo-tab {
+      flex: 1; border: none; border-radius: 10px; padding: 8px 6px; font-size: 12px;
+      background: var(--background, #fff7ed); color: var(--muted, #9a7b6a); cursor: pointer;
+    }
+    .todo-tab.active { background: var(--primary, #ff8a24); color: #fff; font-weight: 600; }
+
+    .todo-item {
+      display: flex; gap: 10px; align-items: stretch; padding: 10px; border-radius: 12px;
+      background: var(--surface, #fff); box-shadow: 0 1px 6px rgba(0,0,0,0.05); margin-bottom: 8px;
+    }
+    .todo-bar { width: 4px; border-radius: 2px; flex: 0 0 4px; }
+    .todo-body { flex: 1; min-width: 0; cursor: pointer; }
+    .todo-title { font-size: 13px; font-weight: 600; color: var(--text, #3a2a20); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .todo-item.closed .todo-title { text-decoration: line-through; color: var(--muted, #9a7b6a); }
+    .todo-content { font-size: 12px; color: var(--muted, #9a7b6a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .todo-meta { font-size: 11px; color: var(--muted, #9a7b6a); margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .todo-meta .overdue { color: #c0392b; font-weight: 600; }
+    .todo-actions { display: flex; flex-direction: column; gap: 2px; justify-content: center; position: relative; }
+    .todo-action { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 3px 5px; border-radius: 6px; }
+    .todo-action:hover { background: #ffeedd; }
+    .todo-postpone-menu { display: flex; flex-direction: column; gap: 3px; position: absolute; right: 38px; top: 0; z-index: 5; }
+    .todo-postpone-menu[hidden] { display: none; }
+    .todo-postpone-btn {
+      border: none; border-radius: 7px; padding: 3px 8px; font-size: 11px; cursor: pointer;
+      background: #fff; color: var(--text, #3a2a20); box-shadow: 0 2px 8px rgba(0,0,0,0.1); white-space: nowrap;
+    }
+
+    /* 待办表格：表头 + 行共用网格列宽 */
+    .todo-table-head, .todo-item {
+      display: grid; grid-template-columns: 34px minmax(0, 1fr) 92px 92px 74px;
+      gap: 8px; align-items: center;
+    }
+    .todo-table-head {
+      padding: 6px 10px; margin-bottom: 6px; border-radius: 10px;
+      background: var(--background, #fff7ed); font-size: 11px; color: var(--muted, #9a7b6a); font-weight: 600;
+    }
+    .todo-table-head .todo-col { cursor: pointer; user-select: none; }
+    .todo-table-head .todo-col:hover { color: var(--primary, #ff8a24); }
+    .todo-table-head .col-title, .todo-table-head .col-actions { cursor: default; }
+    .todo-col { min-width: 0; font-size: 11px; color: var(--muted, #9a7b6a); }
+    .col-due, .col-created { text-align: right; white-space: nowrap; }
+    .col-due.overdue { color: #c0392b; font-weight: 600; }
+    .todo-prio {
+      display: inline-block; width: 22px; text-align: center; border-radius: 6px;
+      font-size: 10px; font-weight: 700; color: #fff; padding: 2px 0;
+    }
+    .abandon-reason { color: #b06a00; }
+    .todo-abandon-input {
+      border: 1px solid #e6d3c2; border-radius: 7px; padding: 4px 6px; font-size: 11px;
+      width: 150px; box-sizing: border-box;
+    }
+    .todo-actions.col-actions { flex-direction: row; gap: 2px; justify-content: flex-end; }
+    .todo-actions .todo-postpone-menu { right: 0; top: 24px; }
+    .todo-item .todo-body { grid-column: 2; }
+    .todo-postpone-btn:hover { background: #ffeedd; }
+    .todo-history { font-size: 11px; color: var(--muted, #9a7b6a); margin-top: 4px; }
+
+    .todo-editor {
+      background: var(--background, #fff7ed); border-radius: 14px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px; margin-top: 10px;
+    }
+    .todo-editor[hidden] { display: none; }
+    .todo-editor input[type="text"], .todo-editor textarea, .todo-editor input[type="date"], .todo-editor input[type="time"] {
+      width: 100%; box-sizing: border-box; border: 1px solid #f0d8c2; border-radius: 10px;
+      padding: 8px 10px; font-size: 13px; font-family: inherit; background: #fff; color: var(--text, #3a2a20);
+      outline: none;
+    }
+    .todo-editor textarea { resize: vertical; min-height: 64px; }
+    .todo-editor-row { display: flex; gap: 8px; }
+    .todo-editor-row input { flex: 1; }
+    .todo-priority-picker { display: flex; gap: 8px; }
+    .todo-priority-dot { width: 28px; height: 28px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
+    .todo-priority-dot.active { border-color: #3a2a20; }
+    .todo-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .todo-editor-actions .update-btn.primary { background: var(--primary, #ff8a24); color: #fff; border-color: transparent; }
   </style>
 </head>
 <body>
@@ -504,12 +610,22 @@
               <button class="size-btn" data-scale="1.2">超大</button>
             </div>
           </div>
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">箱子间距</div>
+              <div class="setting-desc">待办箱子与桌宠之间的距离（点）</div>
+            </div>
+            <div class="gap-control">
+              <input type="range" id="todo-box-gap" min="0" max="40" step="1" value="2" />
+              <span class="gap-value" id="todo-box-gap-value">2</span>
+            </div>
+          </div>
         </div>
 
         <div class="settings-group">
           <div class="section-title">🤖 Claude 技能</div>
           <div class="setting-desc" style="margin-bottom: 10px;">
-            在 Claude Code 里说「小猫咪 帮我…」即可把任务/会议直接送到桌宠提醒。
+            在 Claude Code 里说「小猫咪 帮我…」即可把待办/任务/会议直接送进桌宠的待办箱子。
           </div>
           <div class="setting-item">
             <div>
@@ -542,16 +658,51 @@
         <!-- 待办 tab -->
         <div class="tab-page" id="tab-todo">
         <div class="settings-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div class="section-title" style="margin-bottom: 0;">📝 待办提醒</div>
-            <button class="update-btn" id="todo-clear-expired" style="padding: 6px 12px; font-size: 12px;" disabled>🗑 清除已过期</button>
+          <div class="todo-toolbar">
+            <div class="section-title" style="margin-bottom: 0;">📝 待办</div>
+            <button class="update-btn" id="todo-new-btn" style="padding: 6px 12px; font-size: 12px;">＋ 新建</button>
           </div>
-          <div class="setting-desc" style="margin-bottom: 10px;">
-            右键桌宠 →「⏰ 添加提醒」可创建新待办。
+
+          <div class="calendar" id="todo-calendar">
+            <div class="calendar-header">
+              <div class="calendar-title" id="todo-cal-title">2026年11月</div>
+              <div class="calendar-nav">
+                <button id="todo-cal-prev" title="上个月">‹</button>
+                <button id="todo-cal-today" style="width: auto; padding: 0 10px; font-size: 12px;">今天</button>
+                <button id="todo-cal-next" title="下个月">›</button>
+              </div>
+            </div>
+            <div class="calendar-weekdays">
+              <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+            </div>
+            <div class="calendar-days" id="todo-cal-days"></div>
           </div>
-          <div id="todo-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+
+          <div class="todo-tabs" id="todo-status-tabs">
+            <button class="todo-tab active" data-status="active">进行中 <span id="todo-count-active">0</span></button>
+            <button class="todo-tab" data-status="overdue">过期 <span id="todo-count-overdue">0</span></button>
+            <button class="todo-tab" data-status="done">已完成 <span id="todo-count-done">0</span></button>
+            <button class="todo-tab" data-status="abandoned">放弃 <span id="todo-count-abandoned">0</span></button>
+          </div>
+
+          <div id="todo-list" style="display: flex; flex-direction: column;"></div>
           <div class="setting-desc" id="todo-empty" style="text-align: center; color: var(--muted, #9a7b6a); padding: 20px 0;">
             暂无待办
+          </div>
+
+          <div class="todo-editor" id="todo-editor" hidden>
+            <input type="text" id="todo-editor-title" maxlength="80" placeholder="标题（必填）" />
+            <textarea id="todo-editor-content" maxlength="2000" rows="3" placeholder="内容（可选）"></textarea>
+            <div class="todo-editor-row">
+              <input type="date" id="todo-editor-date" />
+              <input type="time" id="todo-editor-time" step="60" />
+            </div>
+            <div class="todo-priority-picker" id="todo-editor-priority"></div>
+            <div class="todo-editor-actions">
+              <button class="update-btn" id="todo-editor-delete" hidden>删除</button>
+              <button class="update-btn" id="todo-editor-cancel">取消</button>
+              <button class="update-btn primary" id="todo-editor-save">保存</button>
+            </div>
           </div>
         </div>
         </div>
