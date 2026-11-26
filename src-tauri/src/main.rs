@@ -1,3 +1,6 @@
+// Windows release 版隐藏控制台（GUI 子系统），否则会弹出命令行窗口且关闭即杀进程
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use axum::{
     extract::{Path as AxumPath, State as AxumState},
     http::StatusCode,
@@ -1531,13 +1534,33 @@ fn start_drag_thread(app: tauri::AppHandle, label: &str) {
 
 #[tauri::command]
 fn start_pet_drag(app: tauri::AppHandle) {
-    start_drag_thread(app, "pet");
+    // macOS 上 Tauri 原生 startDragging 失效（实测只切姿态不动窗），走自研跟随线程；
+    // 其余平台用原生实现，最稳。
+    #[cfg(target_os = "macos")]
+    {
+        start_drag_thread(app, "pet");
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(w) = app.get_webview_window("pet") {
+            let _ = w.start_dragging();
+        }
+    }
 }
 
 /// 通用窗口拖动（dashboard / reminder 等），替代原生 startDragging
 #[tauri::command]
 fn start_window_drag(app: tauri::AppHandle, window: String) {
-    start_drag_thread(app, &window);
+    #[cfg(target_os = "macos")]
+    {
+        start_drag_thread(app, &window);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(w) = app.get_webview_window(&window) {
+            let _ = w.start_dragging();
+        }
+    }
 }
 
 #[tauri::command]
