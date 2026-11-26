@@ -1156,6 +1156,7 @@ fn stats_path(app: &tauri::AppHandle) -> PathBuf {
 // ---------- 历史数据迁移（Electron 旧 userData → Tauri 数据目录） ----------
 const LEGACY_APP_DIR: &str = "布偶猫桌宠";
 
+#[cfg_attr(windows, allow(unused_variables))]
 fn legacy_app_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
@@ -1464,7 +1465,7 @@ extern "system" {
 #[cfg(windows)]
 fn left_button_down() -> bool {
     // VK_LBUTTON = 0x01，高位 0x8000 表示当前按下
-    unsafe { GetAsyncKeyState(0x01) & 0x8000 != 0 }
+    unsafe { (GetAsyncKeyState(0x01) as u16) & 0x8000 != 0 }
 }
 
 fn move_window_impl(app: &tauri::AppHandle, label: &str, dx: f64, dy: f64) {
