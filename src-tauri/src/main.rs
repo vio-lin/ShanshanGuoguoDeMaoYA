@@ -1157,9 +1157,9 @@ fn stats_path(app: &tauri::AppHandle) -> PathBuf {
 const LEGACY_APP_DIR: &str = "布偶猫桌宠";
 
 fn legacy_app_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
-    let home = app.path().home_dir().ok()?;
     #[cfg(target_os = "macos")]
     {
+        let home = app.path().home_dir().ok()?;
         let dir = home.join("Library/Application Support").join(LEGACY_APP_DIR);
         return dir.is_dir().then_some(dir);
     }
@@ -1442,14 +1442,29 @@ fn set_todo_box_trim(app: tauri::AppHandle, right: f64, left: f64) {
     position_todo_box(&app);
 }
 
+// 全局左键是否按下：按平台取系统 API（拖动线程松手即停的判定）
+#[cfg(target_os = "macos")]
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
-    /// 全局鼠标按键状态：state 0 = combined session，button 0 = 左键
+    /// state 0 = combined session，button 0 = 左键
     fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
 }
 
+#[cfg(target_os = "macos")]
 fn left_button_down() -> bool {
     unsafe { CGEventSourceButtonState(0, 0) }
+}
+
+#[cfg(windows)]
+#[link(name = "user32")]
+extern "system" {
+    fn GetAsyncKeyState(vKey: i32) -> i16;
+}
+
+#[cfg(windows)]
+fn left_button_down() -> bool {
+    // VK_LBUTTON = 0x01，高位 0x8000 表示当前按下
+    unsafe { GetAsyncKeyState(0x01) & 0x8000 != 0 }
 }
 
 fn move_window_impl(app: &tauri::AppHandle, label: &str, dx: f64, dy: f64) {
